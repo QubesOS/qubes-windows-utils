@@ -3,7 +3,7 @@
 #include <strsafe.h>
 #include <stdlib.h>
 
-#include <utf8_conv.h>
+#include <utf8-conv.h>
 #include "log.h"
 
 BOOL logger_initialized = FALSE;
