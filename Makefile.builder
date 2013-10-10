@@ -1,0 +1,7 @@
+ifeq ($(PACKAGE_SET),dom0)
+WIN_SOURCE_SUBDIRS := .
+WIN_COMPILER := mingw
+WIN_PACKAGE_CMD := true
+WIN_OUTPUT_LIBS := shared
+WIN_OUTPUT_HEADERS := include
+endif
