@@ -6,7 +6,7 @@
 #include <utf8-conv.h>
 #include "log.h"
 
-BOOL logger_initialized = FALSE;
+static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
 // if logfile_path is NULL, use stderr
@@ -58,7 +58,6 @@ void log_init(TCHAR *logfile_path)
 	logger_initialized = TRUE;
 }
 
-// writes to console, or file if LOGFILE_PATH is defined
 void _logf(TCHAR *format, ...)
 {
 	va_list args;
@@ -121,45 +120,44 @@ void _logf(TCHAR *format, ...)
  */
 void _perror(TCHAR *prefix)
 {
-	size_t  cchErrorTextSize;
-	LPTSTR  pMessage = NULL;
-	TCHAR   szMessage[2048];
+	size_t  char_count;
+	WCHAR  *message = NULL;
+	TCHAR   buffer[2048];
 	HRESULT ret;
-	ULONG   uErrorCode;
+	DWORD   error_code;
 
-	uErrorCode = GetLastError();
+	error_code = GetLastError();
 
-	memset(szMessage, 0, sizeof(szMessage));
-	cchErrorTextSize = FormatMessageW(
+	memset(buffer, 0, sizeof(buffer));
+	char_count = FormatMessage(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		NULL,
-		uErrorCode,
+		error_code,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR)&pMessage,
+		(WCHAR*)&message,
 		0,
 		NULL);
-	if (!cchErrorTextSize)
+	if (!char_count)
 	{
-		if (FAILED(StringCchPrintf(szMessage, RTL_NUMBER_OF(szMessage), TEXT(" failed with error 0x%08x\n"), uErrorCode)))
-			return;
+		if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), TEXT(" failed with error 0x%08x\n"), error_code)))
+			exit(1);
 	}
 	else
 	{
 		ret = StringCchPrintf(
-			szMessage,
-			RTL_NUMBER_OF(szMessage),
+			buffer,
+			RTL_NUMBER_OF(buffer),
 			TEXT(" failed with error %d: %s%s"),
-			uErrorCode,
-			pMessage,
-			((cchErrorTextSize >= 1) &&
-			(0x0a == pMessage[cchErrorTextSize - 1])) ? TEXT("") : TEXT("\n"));
-		LocalFree(pMessage);
+			error_code,
+			message,
+			((char_count >= 1) && (0x0a == message[char_count - 1])) ? TEXT("") : TEXT("\n"));
+		LocalFree(message);
 
 		if (FAILED(ret))
-			return;
+			exit(1);
 	}
 
-	logf("%s%s", prefix, szMessage);
+	logf("%s%s", prefix, buffer);
 }
 
 void hex_dump (TCHAR *desc, void *addr, int len)
