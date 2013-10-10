@@ -6,7 +6,7 @@ all: libwindows-utils.a
 	mkdir -p libs
 	cp libwindows-utils.a libs/
 
-libwindows-utils.a: exec.o getopt.o log.o utf8_conv.o
+libwindows-utils.a: exec.o getopt.o log.o utf8-conv.o
 	$(AR) rcs $@ $^
 
 clean:
