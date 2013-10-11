@@ -9,8 +9,69 @@
 static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
+// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
+static int get_buffer_len(TCHAR *format, ...)
+{
+	int char_count = 0;
+	va_list args;
+
+	va_start(args, format);
+	char_count = _vsctprintf(format, args);
+	if (char_count == INT_MAX)
+	{
+		_ftprintf(stderr, TEXT("get_buffer_len: message too long\n"));
+		exit(1);
+	}
+	char_count++; // null terminator
+	va_end(args);
+	return char_count;
+}
+
+void log_init(TCHAR *log_dir, TCHAR *base_name)
+{
+	SYSTEMTIME st;
+	DWORD len = 0;
+	int char_count = 0;
+	size_t buffer_size = 0;
+	TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
+	TCHAR *buffer = NULL;
+
+	GetLocalTime(&st);
+
+	char_count = get_buffer_len(format, 
+		log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
+	buffer_size = char_count * sizeof(TCHAR);
+	buffer = (TCHAR*) malloc(buffer_size);
+
+	memset(buffer, 0, buffer_size);
+	if (FAILED(StringCchPrintf(buffer, char_count, 
+		format, 
+		log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId()
+		)))
+	{
+		perror("get_log_file_name: StringCchPrintf"); // this will just write to stderr before logfile is initialized
+		exit(1);
+	}
+
+	log_start(buffer);
+
+	logf("\nLog started: %s\n", buffer);
+	free(buffer);
+	buffer_size = 256;
+	buffer = (TCHAR*) malloc(buffer_size);
+	memset(buffer, 0, buffer_size);
+	len = (DWORD) buffer_size; // buffer_size is at most INT_MAX*2
+	if (!GetUserName(buffer, &len))
+	{
+		perror("get_log_file_name: GetUserName");
+		exit(1);
+	}
+	logf("Running as user: %s\n", buffer);
+	free(buffer);
+}
+
 // if logfile_path is NULL, use stderr
-void log_init(TCHAR *logfile_path)
+void log_start(TCHAR *logfile_path)
 {
 	BYTE utf8_bom[3] = {0xEF, 0xBB, 0xBF};
 	DWORD len;
@@ -58,7 +119,7 @@ void log_init(TCHAR *logfile_path)
 	logger_initialized = TRUE;
 }
 
-void _logf(TCHAR *format, ...)
+void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 {
 	va_list args;
 	TCHAR *buffer = NULL;
@@ -102,6 +163,11 @@ void _logf(TCHAR *format, ...)
 		{
 			_ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
 			exit(1);
+		}
+
+		if (echo_to_stderr)
+		{
+			_ftprintf(stderr, TEXT("%s"), buffer);
 		}
 	}
 	else // use stderr
@@ -157,7 +223,7 @@ void _perror(TCHAR *prefix)
 			exit(1);
 	}
 
-	logf("%s%s", prefix, buffer);
+	errorf("%s%s", prefix, buffer);
 }
 
 void hex_dump (TCHAR *desc, void *addr, int len)
@@ -174,7 +240,7 @@ void hex_dump (TCHAR *desc, void *addr, int len)
 
 // Output description if given.
 	if (desc != NULL)
-		logf("%s:\n", desc);
+		debugf("%s:\n", desc);
 
 	// Process every byte in the data.
 	for (i = 0; i < len; i++) {
@@ -183,17 +249,17 @@ void hex_dump (TCHAR *desc, void *addr, int len)
 		if ((i % 16) == 0) {
 			// Just don't print ASCII for the zeroth line.
 			if (i != 0)
-				logf("  %s\n", buff);
+				debugf("  %s\n", buff);
 
 			// Output the offset.
-			logf("%04x:", i);
+			debugf("%04x:", i);
 		}
 
 		// Now the hex code for the specific character.
 		if (i % 8 == 0 && i % 16 != 0)
-			logf("  %02x", pc[i]);
+			debugf("  %02x", pc[i]);
 		else
-			logf(" %02x", pc[i]);
+			debugf(" %02x", pc[i]);
 
 		// And store a printable ASCII character for later.
 		if ((pc[i] < 0x20) || (pc[i] > 0x7e))
@@ -205,12 +271,12 @@ void hex_dump (TCHAR *desc, void *addr, int len)
 
 	// Pad out last line if not exactly 16 characters.
 	if (i%16 <= 8 && i%16 != 0)
-		logf(" ");
+		debugf(" ");
 	while ((i % 16) != 0) {
-		logf("   ");
+		debugf("   ");
 		i++;
 	}
 
 	// And print the final ASCII bit.
-	logf("  %s\n", buff);
+	debugf("  %s\n", buff);
 }
