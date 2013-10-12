@@ -1,6 +1,10 @@
 #pragma once
 
+// used if DEBUG is defined and client requests default log location in log_init
+#define DEBUG_LOG_DIR "c:\\qubes\\logs"
+
 // formats unique log file path and calls log_start
+// if log_dir is NULL, use default log location (%APPDATA%\Qubes if !DEBUG)
 void log_init(TCHAR *log_dir, TCHAR *base_name);
 
 // if logfile_path is NULL, use stderr

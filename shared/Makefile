@@ -1,4 +1,5 @@
 CFLAGS += -I../include -DUNICODE -D_UNICODE -DWINVER=0x0600 -D_WIN32_WINNT=0x600 -Wall
+LDFLAGS += -lshlwapi
 CC = gcc
 AR = ar
 

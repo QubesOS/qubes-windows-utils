@@ -1,9 +1,11 @@
 #include <tchar.h>
 #include <windows.h>
-#include <strsafe.h>
 #include <stdlib.h>
+#include <Shlwapi.h>
+#include <ShlObj.h>
+#include <strsafe.h>
 
-#include <utf8-conv.h>
+#include "utf8-conv.h"
 #include "log.h"
 
 static BOOL logger_initialized = FALSE;
@@ -35,8 +37,42 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 	size_t buffer_size = 0;
 	TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
 	TCHAR *buffer = NULL;
+#if !defined(DEBUG) && !defined(_DEBUG)
+	TCHAR appdata_path[MAX_PATH];
+#endif
 
 	GetLocalTime(&st);
+
+	// if log_dir is NULL, use default log location
+	if (!log_dir)
+	{
+#if defined(DEBUG) || defined(_DEBUG)
+		log_dir = TEXT(DEBUG_LOG_DIR);
+#else
+		memset(appdata_path, 0, sizeof(appdata_path));
+		// use current user's profile directory
+		if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata_path)))
+		{
+			perror("log_init: SHGetFolderPath"); // this will just write to stderr before logfile is initialized
+			exit(1);
+		}
+		if (!PathAppend(appdata_path, TEXT("Qubes"))) // PathCchAppend requires win 8...
+		{
+			perror("log_init: PathAppend");
+			exit(1);
+		}
+		if (!CreateDirectory(appdata_path, NULL))
+		{
+			if (GetLastError() != ERROR_ALREADY_EXISTS)
+			{
+				perror("log_init: CreateDirectory");
+				errorf("failed to create %s\n", appdata_path);
+				exit(1);
+			}
+		}
+		log_dir = appdata_path;
+#endif
+	}
 
 	char_count = get_buffer_len(format, 
 		log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
@@ -49,7 +85,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 		log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId()
 		)))
 	{
-		perror("get_log_file_name: StringCchPrintf"); // this will just write to stderr before logfile is initialized
+		perror("log_init: StringCchPrintf");
 		exit(1);
 	}
 
@@ -63,7 +99,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 	len = (DWORD) buffer_size; // buffer_size is at most INT_MAX*2
 	if (!GetUserName(buffer, &len))
 	{
-		perror("get_log_file_name: GetUserName");
+		perror("log_init: GetUserName");
 		exit(1);
 	}
 	logf("Running as user: %s\n", buffer);
