@@ -33,3 +33,6 @@ void _perror(TCHAR *prefix);
 #define perror(prefix) _perror(TEXT(prefix))
 
 void hex_dump (TCHAR *desc, void *addr, int len);
+
+// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
+int get_buffer_len(TCHAR *format, ...);

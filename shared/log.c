@@ -12,7 +12,7 @@ static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
 // Returns size of a buffer required to format given string (in TCHARs), including null terminator.
-static int get_buffer_len(TCHAR *format, ...)
+int get_buffer_len(TCHAR *format, ...)
 {
 	int char_count = 0;
 	va_list args;
