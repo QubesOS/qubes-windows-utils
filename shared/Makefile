@@ -6,6 +6,7 @@ AR = ar
 all: libwindows-utils.a
 	mkdir -p libs
 	cp libwindows-utils.a libs/
+	cp log.o libs/
 
 libwindows-utils.a: exec.o getopt.o log.o utf8-conv.o
 	$(AR) rcs $@ $^
