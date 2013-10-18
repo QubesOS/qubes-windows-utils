@@ -262,15 +262,12 @@ void _perror(TCHAR *prefix)
 	errorf("%s%s", prefix, buffer);
 }
 
-void hex_dump (TCHAR *desc, void *addr, int len)
+void _hex_dump (TCHAR *desc, void *addr, int len)
 {
 	int i;
 	TCHAR buff[17];
 	BYTE *pc = (BYTE*)addr;
 
-#if !defined(DEBUG) && !defined(_DEBUG)
-	return;
-#endif
 	if (len == 0)
 		return;
 
