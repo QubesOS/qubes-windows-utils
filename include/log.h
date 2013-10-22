@@ -1,4 +1,5 @@
 #pragma once
+#include <windows.h>
 
 // Underscore functions are meant for internal use.
 
