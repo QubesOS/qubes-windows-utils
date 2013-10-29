@@ -1,92 +1,105 @@
-/*
- * The Qubes OS Project, http://www.qubes-os.org
- *
- * Copyright (C) 2010  Rafal Wojtczuk  <rafal@invisiblethingslab.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- *
- */
-
 #pragma once
+#include <stdint.h>
 
-#define VCHAN_PORT 512
+#define QREXEC_PROTOCOL_VERSION 2
+
+#define RPC_REQUEST_COMMAND "QUBESRPC"
+#define VCHAN_BASE_PORT 512
 #define MAX_DATA_CHUNK 4096
 
+/* Messages sent over control vchan between daemon(dom0) and agent(vm).
+ * The same are used between client(dom0) and daemon(dom0).
+ */
 enum {
-	MSG_CLIENT_TO_SERVER_EXEC_CMDLINE = 0x100,
-	MSG_CLIENT_TO_SERVER_JUST_EXEC,
-	MSG_CLIENT_TO_SERVER_CONNECT_EXISTING,
+    /* daemon->agent messages */
 
-	MSG_SERVER_TO_AGENT_CONNECT_EXISTING,
-	MSG_SERVER_TO_AGENT_EXEC_CMDLINE,
-	MSG_SERVER_TO_AGENT_JUST_EXEC,
-	MSG_SERVER_TO_AGENT_INPUT,
-	MSG_SERVER_TO_AGENT_CLIENT_END,
+    /* start process in VM and pass its stdin/out/err to dom0
+     * struct exec_params passed as data */
+    MSG_EXEC_CMDLINE = 0x200,
 
-	MSG_XOFF,
-	MSG_XON,
+    /* start process in VM discarding its stdin/out/err (connect to /dev/null)
+    * struct exec_params passed as data */
+    MSG_JUST_EXEC,
 
-	MSG_AGENT_TO_SERVER_STDOUT,
-	MSG_AGENT_TO_SERVER_STDERR,
-	MSG_AGENT_TO_SERVER_EXIT_CODE,
-	MSG_AGENT_TO_SERVER_TRIGGER_CONNECT_EXISTING,
+    /* connect to existing process in VM to receive its stdin/out/err
+     * struct service_params passed as data */
+    MSG_SERVICE_CONNECT,
 
-	MSG_SERVER_TO_CLIENT_STDOUT,
-	MSG_SERVER_TO_CLIENT_STDERR,
-	MSG_SERVER_TO_CLIENT_EXIT_CODE
+    /* refuse to start a service (denied by policy, invalid parameters etc)
+     * struct service_params passed as data to identify which service call was
+     * refused */
+    MSG_SERVICE_REFUSED,
+
+    /* agent->daemon messages */
+    /* call Qubes RPC service
+     * struct trigger_service_params passed as data */
+    MSG_TRIGGER_SERVICE = 0x210,
+
+    /* common messages */
+    /* initialize connection, struct peer_info passed as data
+     * should be sent as the first message (server first, then client) */
+    MSG_HELLO = 0x300,
 };
 
-struct server_header {
-	unsigned int type;
-	unsigned int client_id;
-	unsigned int len;
+/* uniform for all peers, data type depends on message type */
+struct msg_header {
+    uint32_t type;           /* message type */
+    uint32_t len;            /* data length */
 };
 
-struct client_header {
-	unsigned int type;
-	unsigned int len;
+/* variable size */
+struct exec_params {
+    uint32_t connect_domain; /* target domain name */
+    uint32_t connect_port;   /* target vchan port for i/o exchange */
+    char cmdline[0];         /* command line to execute, size = msg_header.len - sizeof(struct exec_params) */
 };
 
-struct connect_existing_params {
-	char ident[32];
+struct service_params {
+    char ident[32];
 };
 
-struct trigger_connect_params {
-	char exec_index[64];
-	char target_vmname[32];
-	struct connect_existing_params process_fds;
+struct trigger_service_params {
+    char service_name[64];
+    char target_domain[32];
+    struct service_params request_id; /* service request id */
 };
+
+struct peer_info {
+    uint32_t version; /* qrexec protocol version */
+};
+
+/* data vchan client<->agent, separate for each VM process */
+enum {
+    /* stdin dom0->VM */
+    MSG_DATA_STDIN = 0x190,
+    /* stdout VM->dom0 */
+    MSG_DATA_STDOUT,
+    /* stderr VM->dom0 */
+    MSG_DATA_STDERR,
+    /* VM process exit code VM->dom0 (int) */
+    MSG_DATA_EXIT_CODE,
+};
+
+// windows-specific stuff below
 
 typedef struct {
-	HANDLE	hPipeStdin;
-	HANDLE	hPipeStdout;
-	HANDLE	hPipeStderr;
+    HANDLE	hPipeStdin;
+    HANDLE	hPipeStdout;
+    HANDLE	hPipeStderr;
 } IO_HANDLES_ARRAY;
 
 enum {
-	CPR_TYPE_NONE = 0,
-	CPR_TYPE_HANDLE,
-	CPR_TYPE_ERROR_CODE
+    CPR_TYPE_NONE = 0,
+    CPR_TYPE_HANDLE,
+    CPR_TYPE_ERROR_CODE
 };
 
 typedef struct {
-	UCHAR	bType;
-	union {
-		HANDLE	hProcess;
-		DWORD	dwErrorCode;
-	} ResponseData;
+    UCHAR	bType;
+    union {
+        HANDLE	hProcess;
+        DWORD	dwErrorCode;
+    } ResponseData;
 } CREATE_PROCESS_RESPONSE;
 
 #define	ERROR_SET_LINUX		0x00
@@ -94,5 +107,3 @@ typedef struct {
 #define	ERROR_SET_NTSTATUS	0xC0
 
 #define	MAKE_ERROR_RESPONSE(ErrorSet, ErrorCode)	((ErrorSet << 24) | (ErrorCode & 0x00FFFFFF))
-
-#define RPC_REQUEST_COMMAND	L"QUBESRPC "

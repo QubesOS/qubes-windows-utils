@@ -1,5 +1,5 @@
-CFLAGS += -I../include -DUNICODE -D_UNICODE -DWINVER=0x0600 -D_WIN32_WINNT=0x600 -Wall
-LDFLAGS += -lshlwapi
+CFLAGS += -I../include -I$(QUBES_INCLUDES) -DUNICODE -D_UNICODE -DWINVER=0x0600 -D_WIN32_WINNT=0x600 -Wall
+LDFLAGS += -L$(QUBES_LIBS) -lshlwapi -lvchan-$(BACKEND_VMM)
 CC = gcc
 AR = ar
 
@@ -8,7 +8,7 @@ all: libwindows-utils.a
 	cp libwindows-utils.a libs/
 	cp *.o libs/
 
-libwindows-utils.a: exec.o getopt.o log.o utf8-conv.o buffer.o
+libwindows-utils.a: exec.o getopt.o log.o utf8-conv.o buffer.o vchan-common.o
 	$(AR) rcs $@ $^
 
 clean:

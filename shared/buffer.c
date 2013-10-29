@@ -67,7 +67,7 @@ int buffer_clear(buffer_t *buffer)
 int buffer_add_data(buffer_t *buffer, void *pdata, size_t data_size)
 {
 	char *data = (char*) pdata;
-	size_t used_size, free_size, free_at_end;
+	size_t free_size, free_at_end;
 
 	debugf("buffer_add_data(0x%x, 0x%x, %d)\n", buffer, data, data_size);
 
@@ -85,13 +85,7 @@ int buffer_add_data(buffer_t *buffer, void *pdata, size_t data_size)
 		buffer->data_start = buffer->data_end = buffer->start;
 	}
 
-	// needs that if DataEnd is at the end of buffer it's not wrapped to 0
-	if (buffer->data_start <= buffer->data_end) // data in one consecutive block (or empty)
-		used_size = (buffer->data_end - buffer->data_start);
-	else
-		used_size = (buffer->data_end + buffer->size - buffer->data_start);
-
-	free_size = buffer->size - used_size;
+	free_size = buffer_free_size(buffer);
 	//  =       <       <       <!      >
 	// [.....] [oo...] [.oo..] [...oo] [o...o]
 	if (data_size > free_size)
@@ -123,7 +117,7 @@ int buffer_add_data(buffer_t *buffer, void *pdata, size_t data_size)
 	if (buffer->data_end > buffer->start+buffer->size) // wrap only if end > limit, if end==limit pointer stays at the end
 		buffer->data_end -= buffer->size;
 
-	if (used_size + data_size == buffer->size) // buffer full
+	if (free_size - data_size == 0) // buffer full
 		buffer->data_end = 0;
 
 	return 0;
@@ -150,19 +144,10 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
 		}
 	}
 
-	if (buffer->data_end == 0) // buffer full, only _pDataStart is valid
-	{
+	used_size = buffer_used_size(buffer);
+
+	if (used_size == buffer->size) // buffer full, only _pDataStart is valid
 		buffer->data_end = buffer->data_start;
-		used_size = buffer->size;
-	}
-	else
-	{
-		// needs that if DataEnd is at the end of buffer it's not wrapped to 0
-		if (buffer->data_start < buffer->data_end) // data in one consecutive block
-			used_size = (buffer->data_end - buffer->data_start);
-		else
-			used_size = (buffer->data_end + buffer->size - buffer->data_start);
-	}
 
 	//  full    <       >       <       <
 	// [ooooo] [..ooo] [o..oo] [ooo..] [.ooo.]
@@ -214,7 +199,7 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
 }
 
 // get used data size
-size_t buffer_get_size(buffer_t *buffer)
+size_t buffer_used_size(buffer_t *buffer)
 {
 	if (buffer->size == 0 || buffer->start == 0 || buffer->data_start == 0)
 		return 0;
@@ -226,4 +211,9 @@ size_t buffer_get_size(buffer_t *buffer)
 		return (buffer->data_end - buffer->data_start);
 	else
 		return (buffer->data_end + buffer->size - buffer->data_start);
+}
+
+size_t buffer_free_size(buffer_t *buffer)
+{
+	return buffer->size - buffer_used_size(buffer);
 }

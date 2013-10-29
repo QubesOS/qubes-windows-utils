@@ -27,7 +27,10 @@ int buffer_add_data(buffer_t *buffer, void *data, size_t data_size);
 int buffer_get_data(buffer_t *buffer, void *data, size_t *data_size, BUFFER_UNDERFLOW_MODE underflow_mode);
 
 // returns bytes used by data
-size_t buffer_get_size(buffer_t *buffer);
+size_t buffer_used_size(buffer_t *buffer);
+
+// returns free space
+size_t buffer_free_size(buffer_t *buffer);
 
 // zero-fill buffer, rewind internal pointer
 int buffer_clear(buffer_t *buffer);
