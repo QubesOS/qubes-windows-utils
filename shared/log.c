@@ -4,12 +4,27 @@
 #include <Shlwapi.h>
 #include <ShlObj.h>
 #include <strsafe.h>
-
+#include <Lmcons.h>
 #include "utf8-conv.h"
 #include "log.h"
 
 static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
+
+// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
+int get_buffer_len_va(TCHAR *format, va_list args)
+{
+    int char_count = 0;
+
+    char_count = _vsctprintf(format, args);
+    if (char_count == INT_MAX)
+    {
+        _ftprintf(stderr, TEXT("get_buffer_len_va: string too long\n"));
+        exit(1);
+    }
+    char_count++; // null terminator
+    return char_count;
+}
 
 // Returns size of a buffer required to format given string (in TCHARs), including null terminator.
 int get_buffer_len(TCHAR *format, ...)
@@ -21,7 +36,7 @@ int get_buffer_len(TCHAR *format, ...)
     char_count = _vsctprintf(format, args);
     if (char_count == INT_MAX)
     {
-        _ftprintf(stderr, TEXT("get_buffer_len: message too long\n"));
+        _ftprintf(stderr, TEXT("get_buffer_len: string too long\n"));
         exit(1);
     }
     char_count++; // null terminator
@@ -93,7 +108,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 
     logf("\nLog started: %s\n", buffer);
     free(buffer);
-    buffer_size = 256;
+    buffer_size = UNLEN;
     buffer = (TCHAR*) malloc(buffer_size);
     memset(buffer, 0, buffer_size);
     len = (DWORD) buffer_size; // buffer_size is at most INT_MAX*2
@@ -161,26 +176,35 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     TCHAR *buffer = NULL;
     int char_count = 0;
     size_t buffer_size = 0;
-    DWORD written;
+    DWORD written = 0;
+    SYSTEMTIME st;
+    TCHAR time_buffer[64];
+    int time_len = 0;
 #ifdef UNICODE
-    char *buffer_utf8 = 0;
+    char *buffer_utf8 = NULL;
+    char *time_buffer_utf8 = NULL;
+    size_t time_buffer_size = 0;
 #endif
+
+    GetLocalTime(&st); // or system time (UTC)?
+    time_len = _stprintf_s(time_buffer, RTL_NUMBER_OF(time_buffer), 
+        TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] "), 
+        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
     va_start(args, format);
     // format buffer
-    char_count = _vsctprintf(format, args);
-    if (char_count == INT_MAX)
-    {
-        _ftprintf(stderr, TEXT("_logf: message too long\n"));
-        exit(1);
-    }
-    char_count++;
+    char_count = get_buffer_len_va(format, args);
     buffer_size = char_count * sizeof(TCHAR);
     buffer = (TCHAR*) malloc(buffer_size);
     _vstprintf_s(buffer, char_count, format, args);
     va_end(args);
 
 #ifdef UNICODE
+    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(time_buffer, &time_buffer_utf8, &time_buffer_size))
+    {
+        _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
+        exit(1);
+    }
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &buffer_utf8, &buffer_size))
     {
         _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
@@ -190,6 +214,16 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 
     if (logfile_handle != INVALID_HANDLE_VALUE)
     {
+#ifdef UNICODE
+        if (!WriteFile(logfile_handle, time_buffer_utf8, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
+#else
+        if (!WriteFile(logfile_handle, time_buffer, (DWORD)time_buffer_size-sizeof(TCHAR), &written, NULL) || written != (DWORD)time_buffer_size-sizeof(TCHAR))
+#endif
+        {
+            _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+            exit(1);
+        }
+
         // buffer_size is at most INT_MAX*2
 #ifdef UNICODE
         if (!WriteFile(logfile_handle, buffer_utf8, (DWORD)buffer_size, &written, NULL) || written != (DWORD)buffer_size)
@@ -203,11 +237,13 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 
         if (echo_to_stderr)
         {
+            _ftprintf(stderr, TEXT("%s"), time_buffer);
             _ftprintf(stderr, TEXT("%s"), buffer);
         }
     }
     else // use stderr
     {
+        _ftprintf(stderr, TEXT("%s"), time_buffer);
         _ftprintf(stderr, TEXT("%s"), buffer);
     }
 
@@ -262,6 +298,7 @@ void _perror(TCHAR *prefix)
     errorf("%s%s", prefix, buffer);
 }
 
+// disabled if LOG_NO_HEX_DUMP is defined
 void _hex_dump (TCHAR *desc, void *addr, int len)
 {
     int i;
