@@ -180,6 +180,9 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     SYSTEMTIME st;
     TCHAR time_buffer[64];
     int time_len = 0;
+    char *newline = "\n";
+#define NEWLINE_LEN 1
+    BOOL add_newline = FALSE;
 #ifdef UNICODE
     char *buffer_utf8 = NULL;
     char *time_buffer_utf8 = NULL;
@@ -210,6 +213,11 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
         _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
         exit(1);
     }
+    if (buffer_utf8[buffer_size-1] != '\n')
+        add_newline = TRUE;
+#else
+    if (buffer[buffer_size-1] != '\n')
+        add_newline = TRUE;
 #endif
 
     if (logfile_handle != INVALID_HANDLE_VALUE)
@@ -235,16 +243,41 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
             exit(1);
         }
 
+        if (add_newline)
+        {
+            if (!WriteFile(logfile_handle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
+            {
+                _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+                exit(1);
+            }
+        }
+
         if (echo_to_stderr)
         {
-            _ftprintf(stderr, TEXT("%s"), time_buffer);
-            _ftprintf(stderr, TEXT("%s"), buffer);
+            _ftprintf(stderr, time_buffer);
+            _ftprintf(stderr, buffer);
+            if (add_newline)
+            {
+#ifdef UNICODE
+                _ftprintf(stderr, TEXT("%S"), newline);
+#else
+                _ftprintf(stderr, TEXT("%s"), newline);
+#endif
+            }
         }
     }
     else // use stderr
     {
         _ftprintf(stderr, TEXT("%s"), time_buffer);
         _ftprintf(stderr, TEXT("%s"), buffer);
+        if (add_newline)
+        {
+#ifdef UNICODE
+            _ftprintf(stderr, TEXT("%S"), newline);
+#else
+            _ftprintf(stderr, TEXT("%s"), newline);
+#endif
+        }
     }
 
 #ifdef UNICODE
