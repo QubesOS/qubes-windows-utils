@@ -6,6 +6,9 @@
 // Used if DEBUG is defined and client requests default log location in log_init.
 #define DEBUG_LOG_DIR "c:\\qubes\\logs"
 
+// size of internal buffer in TCHARs
+#define LOG_MAX_MESSAGE_LENGTH 65536
+
 // Formats unique log file path and calls log_start.
 // If log_dir is NULL, use default log location (%APPDATA%\Qubes if !DEBUG).
 void log_init(TCHAR *log_dir, TCHAR *base_name);
@@ -44,5 +47,4 @@ void _hex_dump (TCHAR *desc, void *addr, int len);
 #define hex_dump(desc, addr, len)
 #endif
 
-// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
-int get_buffer_len(TCHAR *format, ...);
+void log_flush();

@@ -11,50 +11,21 @@
 static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
-// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
-int get_buffer_len_va(TCHAR *format, va_list args)
-{
-    int char_count = 0;
+#define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
-    char_count = _vsctprintf(format, args);
-    if (char_count == INT_MAX)
-    {
-        _ftprintf(stderr, TEXT("get_buffer_len_va: string too long\n"));
-        exit(1);
-    }
-    char_count++; // null terminator
-    return char_count;
-}
-
-// Returns size of a buffer required to format given string (in TCHARs), including null terminator.
-int get_buffer_len(TCHAR *format, ...)
-{
-    int char_count = 0;
-    va_list args;
-
-    va_start(args, format);
-    char_count = _vsctprintf(format, args);
-    if (char_count == INT_MAX)
-    {
-        _ftprintf(stderr, TEXT("get_buffer_len: string too long\n"));
-        exit(1);
-    }
-    char_count++; // null terminator
-    va_end(args);
-    return char_count;
-}
+#if (UNLEN > LOG_MAX_MESSAGE_LENGTH)
+#error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
+#endif
 
 void log_init(TCHAR *log_dir, TCHAR *base_name)
 {
     SYSTEMTIME st;
     DWORD len = 0;
-    int char_count = 0;
-    size_t buffer_size = 0;
     TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
-    TCHAR *buffer = NULL;
 #if !defined(DEBUG) && !defined(_DEBUG)
     TCHAR appdata_path[MAX_PATH];
 #endif
+    TCHAR buffer[MAX_PATH];
 
     GetLocalTime(&st);
 
@@ -89,15 +60,11 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 #endif
     }
 
-    char_count = get_buffer_len(format, 
-        log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
-    buffer_size = char_count * sizeof(TCHAR);
-    buffer = (TCHAR*) malloc(buffer_size);
-
-    memset(buffer, 0, buffer_size);
-    if (FAILED(StringCchPrintf(buffer, char_count, 
+    memset(buffer, 0, sizeof(buffer));
+    if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), 
         format, 
-        log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId()
+        log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
+        GetCurrentProcessId()
         )))
     {
         perror("log_init: StringCchPrintf");
@@ -107,18 +74,16 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     log_start(buffer);
 
     logf("\nLog started: %s\n", buffer);
-    free(buffer);
-    buffer_size = UNLEN;
-    buffer = (TCHAR*) malloc(buffer_size);
-    memset(buffer, 0, buffer_size);
-    len = (DWORD) buffer_size; // buffer_size is at most INT_MAX*2
+    memset(buffer, 0, sizeof(buffer));
+
+    // if we pass too large buffer it returns ERROR_BUFFER_TOO_SMALL... go figure
+    len = UNLEN;
     if (!GetUserName(buffer, &len))
     {
         perror("log_init: GetUserName");
         exit(1);
     }
     logf("Running as user: %s\n", buffer);
-    free(buffer);
 }
 
 // if logfile_path is NULL, use stderr
@@ -170,16 +135,21 @@ void log_start(TCHAR *logfile_path)
     logger_initialized = TRUE;
 }
 
+void log_flush()
+{
+    if (logger_initialized)
+        FlushFileBuffers(logfile_handle);
+}
+
 void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 {
     va_list args;
-    TCHAR *buffer = NULL;
-    int char_count = 0;
     size_t buffer_size = 0;
     DWORD written = 0;
     SYSTEMTIME st;
     TCHAR time_buffer[64];
     int time_len = 0;
+    TCHAR buffer[BUFFER_SIZE];
     char *newline = "\n";
 #define NEWLINE_LEN 1
     BOOL add_newline = FALSE;
@@ -189,17 +159,17 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     size_t time_buffer_size = 0;
 #endif
 
+    memset(time_buffer, 0, sizeof(time_buffer));
     GetLocalTime(&st); // or system time (UTC)?
     time_len = _stprintf_s(time_buffer, RTL_NUMBER_OF(time_buffer), 
         TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] "), 
         st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 
     va_start(args, format);
+
+    memset(buffer, 0, sizeof(buffer));
     // format buffer
-    char_count = get_buffer_len_va(format, args);
-    buffer_size = char_count * sizeof(TCHAR);
-    buffer = (TCHAR*) malloc(buffer_size);
-    _vstprintf_s(buffer, char_count, format, args);
+    buffer_size = _vstprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(TCHAR);
     va_end(args);
 
 #ifdef UNICODE
@@ -281,9 +251,9 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     }
 
 #ifdef UNICODE
+    free(time_buffer_utf8);
     free(buffer_utf8);
 #endif
-    free(buffer);
 }
 
 /** Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno
