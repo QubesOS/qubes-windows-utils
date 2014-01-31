@@ -39,19 +39,19 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         // use current user's profile directory
         if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata_path)))
         {
-            perror("log_init: SHGetFolderPath"); // this will just write to stderr before logfile is initialized
+            perror("SHGetFolderPath"); // this will just write to stderr before logfile is initialized
             exit(1);
         }
         if (!PathAppend(appdata_path, TEXT("Qubes"))) // PathCchAppend requires win 8...
         {
-            perror("log_init: PathAppend");
+            perror("PathAppend");
             exit(1);
         }
         if (!CreateDirectory(appdata_path, NULL))
         {
             if (GetLastError() != ERROR_ALREADY_EXISTS)
             {
-                perror("log_init: CreateDirectory");
+                perror("CreateDirectory");
                 errorf("failed to create %s\n", appdata_path);
                 exit(1);
             }
@@ -61,13 +61,13 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     }
 
     memset(buffer, 0, sizeof(buffer));
-    if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), 
-        format, 
+    if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer),
+        format,
         log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
         GetCurrentProcessId()
         )))
     {
-        perror("log_init: StringCchPrintf");
+        perror("StringCchPrintf");
         exit(1);
     }
 
@@ -80,7 +80,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     len = UNLEN;
     if (!GetUserName(buffer, &len))
     {
-        perror("log_init: GetUserName");
+        perror("GetUserName");
         exit(1);
     }
     logf("Running as user: %s\n", buffer);
@@ -107,7 +107,7 @@ void log_start(TCHAR *logfile_path)
 
             if (logfile_handle == INVALID_HANDLE_VALUE)
             {
-                _ftprintf(stderr, TEXT("_log_init: CreateFile(%s) failed: error %d\n"), 
+                _ftprintf(stderr, TEXT("log_start: CreateFile(%s) failed: error %d\n"),
                     logfile_path, GetLastError());
                 exit(1);
             }
@@ -116,7 +116,7 @@ void log_start(TCHAR *logfile_path)
             len = SetFilePointer(logfile_handle, 0, 0, SEEK_END);
             if (INVALID_SET_FILE_POINTER == len)
             {
-                _ftprintf(stderr, TEXT("_log_init: SetFilePointer(%s) failed: error %d\n"), 
+                _ftprintf(stderr, TEXT("log_start: SetFilePointer(%s) failed: error %d\n"),
                     logfile_path, GetLastError());
                 exit(1);
             }
@@ -125,7 +125,7 @@ void log_start(TCHAR *logfile_path)
             {
                 if (!WriteFile(logfile_handle, utf8_bom, 3, &len, NULL))
                 {
-                    _ftprintf(stderr, TEXT("_log_init: WriteFile(%s) failed: error %d\n"), 
+                    _ftprintf(stderr, TEXT("log_start: WriteFile(%s) failed: error %d\n"),
                         logfile_path, GetLastError());
                     exit(1);
                 }
@@ -141,7 +141,7 @@ void log_flush()
         FlushFileBuffers(logfile_handle);
 }
 
-void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
+void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
 {
     va_list args;
     size_t buffer_size = 0;
@@ -156,14 +156,18 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 #ifdef UNICODE
     char *buffer_utf8 = NULL;
     char *time_buffer_utf8 = NULL;
-    size_t time_buffer_size = 0;
 #endif
+    size_t time_buffer_size = 0;
+    DWORD last_error = GetLastError(); // preserve last error
 
-    memset(time_buffer, 0, sizeof(time_buffer));
-    GetLocalTime(&st); // or system time (UTC)?
-    time_len = _stprintf_s(time_buffer, RTL_NUMBER_OF(time_buffer), 
-        TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] "), 
-        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    if (!raw)
+    {
+        memset(time_buffer, 0, sizeof(time_buffer));
+        GetLocalTime(&st); // or system time (UTC)?
+        time_len = _stprintf_s(time_buffer, RTL_NUMBER_OF(time_buffer),
+            TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] "),
+            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    }
 
     va_start(args, format);
 
@@ -173,11 +177,15 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     va_end(args);
 
 #ifdef UNICODE
-    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(time_buffer, &time_buffer_utf8, &time_buffer_size))
+    if (!raw)
     {
-        _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
-        exit(1);
+        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(time_buffer, &time_buffer_utf8, &time_buffer_size))
+        {
+            _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
+            exit(1);
+        }
     }
+
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &buffer_utf8, &buffer_size))
     {
         _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
@@ -188,32 +196,37 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 #else
     if (buffer[buffer_size-1] != '\n')
         add_newline = TRUE;
+    if (!raw)
+        time_buffer_size = time_len;
 #endif
 
     if (logfile_handle != INVALID_HANDLE_VALUE)
     {
-#ifdef UNICODE
-        if (!WriteFile(logfile_handle, time_buffer_utf8, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
-#else
-        if (!WriteFile(logfile_handle, time_buffer, (DWORD)time_buffer_size-sizeof(TCHAR), &written, NULL) || written != (DWORD)time_buffer_size-sizeof(TCHAR))
-#endif
+        if (!raw)
         {
-            _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
-            exit(1);
+#ifdef UNICODE
+            if (!WriteFile(logfile_handle, time_buffer_utf8, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
+#else
+            if (!WriteFile(logfile_handle, time_buffer, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
+#endif
+            {
+                _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+                exit(1);
+            }
         }
 
         // buffer_size is at most INT_MAX*2
 #ifdef UNICODE
         if (!WriteFile(logfile_handle, buffer_utf8, (DWORD)buffer_size, &written, NULL) || written != (DWORD)buffer_size)
 #else
-        if (!WriteFile(logfile_handle, buffer, (DWORD)buffer_size-sizeof(TCHAR), &written, NULL) || written != (DWORD)buffer_size-sizeof(TCHAR))
+        if (!WriteFile(logfile_handle, buffer, (DWORD)buffer_size, &written, NULL) || written != (DWORD)buffer_size)
 #endif
         {
             _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
             exit(1);
         }
 
-        if (add_newline)
+        if (add_newline && !raw)
         {
             if (!WriteFile(logfile_handle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
             {
@@ -224,9 +237,10 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 
         if (echo_to_stderr)
         {
-            _ftprintf(stderr, time_buffer);
+            if (!raw)
+                _ftprintf(stderr, time_buffer);
             _ftprintf(stderr, buffer);
-            if (add_newline)
+            if (add_newline && !raw)
             {
 #ifdef UNICODE
                 _ftprintf(stderr, TEXT("%S"), newline);
@@ -234,13 +248,18 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
                 _ftprintf(stderr, TEXT("%s"), newline);
 #endif
             }
+
+#if defined(DEBUG) || defined(_DEBUG)
+            OutputDebugString(buffer);
+#endif
         }
     }
     else // use stderr
     {
-        _ftprintf(stderr, TEXT("%s"), time_buffer);
+        if (!raw)
+            _ftprintf(stderr, TEXT("%s"), time_buffer);
         _ftprintf(stderr, TEXT("%s"), buffer);
-        if (add_newline)
+        if (add_newline && !raw)
         {
 #ifdef UNICODE
             _ftprintf(stderr, TEXT("%S"), newline);
@@ -251,9 +270,11 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
     }
 
 #ifdef UNICODE
-    free(time_buffer_utf8);
+    if (!raw)
+        free(time_buffer_utf8);
     free(buffer_utf8);
 #endif
+    SetLastError(last_error);
 }
 
 /** Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno
@@ -262,7 +283,7 @@ void _logf(BOOL echo_to_stderr, TCHAR *format, ...)
 void _perror(TCHAR *prefix)
 {
     size_t  char_count;
-    WCHAR  *message = NULL;
+    TCHAR  *message = NULL;
     TCHAR   buffer[2048];
     HRESULT ret;
     DWORD   error_code;
@@ -275,7 +296,7 @@ void _perror(TCHAR *prefix)
         NULL,
         error_code,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (WCHAR*)&message,
+        (TCHAR*)&message,
         0,
         NULL);
     if (!char_count)
@@ -298,11 +319,12 @@ void _perror(TCHAR *prefix)
             exit(1);
     }
 
-    errorf("%s%s", prefix, buffer);
+    _logf(TRUE, FALSE, TEXT("%s%s"), prefix, buffer);
+    SetLastError(error_code); // preserve
 }
 
 // disabled if LOG_NO_HEX_DUMP is defined
-void _hex_dump (TCHAR *desc, void *addr, int len)
+void _hex_dump(TCHAR *desc, void *addr, int len)
 {
     int i;
     TCHAR buff[17];
@@ -311,9 +333,9 @@ void _hex_dump (TCHAR *desc, void *addr, int len)
     if (len == 0)
         return;
 
-// Output description if given.
+    // Output description if given.
     if (desc != NULL)
-        debugf("%s:\n", desc);
+        debugf_raw("%s:\n", desc);
 
     // Process every byte in the data.
     for (i = 0; i < len; i++) {
@@ -322,17 +344,17 @@ void _hex_dump (TCHAR *desc, void *addr, int len)
         if ((i % 16) == 0) {
             // Just don't print ASCII for the zeroth line.
             if (i != 0)
-                debugf("  %s\n", buff);
+                debugf_raw("  %s\n", buff);
 
             // Output the offset.
-            debugf("%04x:", i);
+            debugf_raw("%04x:", i);
         }
 
         // Now the hex code for the specific character.
         if (i % 8 == 0 && i % 16 != 0)
-            debugf("  %02x", pc[i]);
+            debugf_raw("  %02x", pc[i]);
         else
-            debugf(" %02x", pc[i]);
+            debugf_raw(" %02x", pc[i]);
 
         // And store a printable ASCII character for later.
         if ((pc[i] < 0x20) || (pc[i] > 0x7e))
@@ -344,12 +366,12 @@ void _hex_dump (TCHAR *desc, void *addr, int len)
 
     // Pad out last line if not exactly 16 characters.
     if (i%16 <= 8 && i%16 != 0)
-        debugf(" ");
+        debugf_raw(" ");
     while ((i % 16) != 0) {
-        debugf("   ");
+        debugf_raw("   ");
         i++;
     }
 
     // And print the final ASCII bit.
-    debugf("  %s\n", buff);
+    debugf_raw("  %s\n", buff);
 }
