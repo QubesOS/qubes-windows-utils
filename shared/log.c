@@ -141,32 +141,39 @@ void log_flush()
         FlushFileBuffers(logfile_handle);
 }
 
-void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
+void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *format, ...)
 {
     va_list args;
     size_t buffer_size = 0;
     DWORD written = 0;
     SYSTEMTIME st;
-    TCHAR time_buffer[64];
-    int time_len = 0;
+    TCHAR prefix_buffer[256];
+    int prefix_len = 0;
     TCHAR buffer[BUFFER_SIZE];
     char *newline = "\n";
 #define NEWLINE_LEN 1
     BOOL add_newline = FALSE;
 #ifdef UNICODE
     char *buffer_utf8 = NULL;
-    char *time_buffer_utf8 = NULL;
+    char *prefix_buffer_utf8 = NULL;
 #endif
-    size_t time_buffer_size = 0;
+    size_t prefix_buffer_size = 0;
     DWORD last_error = GetLastError(); // preserve last error
 
+#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] ")
+#ifdef UNICODE
+#define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
+#else
+#define PREFIX_FORMAT_FUNCNAME TEXT("%s: ")
+#endif
     if (!raw)
     {
-        memset(time_buffer, 0, sizeof(time_buffer));
+        memset(prefix_buffer, 0, sizeof(prefix_buffer));
         GetLocalTime(&st); // or system time (UTC)?
-        time_len = _stprintf_s(time_buffer, RTL_NUMBER_OF(time_buffer),
-            TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] "),
-            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+        prefix_len = _stprintf_s(prefix_buffer, RTL_NUMBER_OF(prefix_buffer),
+            function_name ? PREFIX_FORMAT PREFIX_FORMAT_FUNCNAME : PREFIX_FORMAT,
+            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+            function_name);
     }
 
     va_start(args, format);
@@ -179,7 +186,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
 #ifdef UNICODE
     if (!raw)
     {
-        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(time_buffer, &time_buffer_utf8, &time_buffer_size))
+        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefix_buffer, &prefix_buffer_utf8, &prefix_buffer_size))
         {
             _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
             exit(1);
@@ -197,7 +204,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
     if (buffer[buffer_size-1] != '\n')
         add_newline = TRUE;
     if (!raw)
-        time_buffer_size = time_len;
+        prefix_buffer_size = prefix_len;
 #endif
 
     if (logfile_handle != INVALID_HANDLE_VALUE)
@@ -205,9 +212,9 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
         if (!raw)
         {
 #ifdef UNICODE
-            if (!WriteFile(logfile_handle, time_buffer_utf8, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
+            if (!WriteFile(logfile_handle, prefix_buffer_utf8, (DWORD)prefix_buffer_size, &written, NULL) || written != (DWORD)prefix_buffer_size)
 #else
-            if (!WriteFile(logfile_handle, time_buffer, (DWORD)time_buffer_size, &written, NULL) || written != (DWORD)time_buffer_size)
+            if (!WriteFile(logfile_handle, prefix_buffer, (DWORD)prefix_buffer_size, &written, NULL) || written != (DWORD)prefix_buffer_size)
 #endif
             {
                 _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
@@ -238,7 +245,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
         if (echo_to_stderr)
         {
             if (!raw)
-                _ftprintf(stderr, time_buffer);
+                _ftprintf(stderr, prefix_buffer);
             _ftprintf(stderr, buffer);
             if (add_newline && !raw)
             {
@@ -257,7 +264,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
     else // use stderr
     {
         if (!raw)
-            _ftprintf(stderr, TEXT("%s"), time_buffer);
+            _ftprintf(stderr, TEXT("%s"), prefix_buffer);
         _ftprintf(stderr, TEXT("%s"), buffer);
         if (add_newline && !raw)
         {
@@ -271,7 +278,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
 
 #ifdef UNICODE
     if (!raw)
-        free(time_buffer_utf8);
+        free(prefix_buffer_utf8);
     free(buffer_utf8);
 #endif
     SetLastError(last_error);
@@ -280,7 +287,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, TCHAR *format, ...)
 /** Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno
  * @param prefix Error message prefix
  */
-void _perror(TCHAR *prefix)
+void _perror(const char *function_name, TCHAR *prefix)
 {
     size_t  char_count;
     TCHAR  *message = NULL;
@@ -319,7 +326,7 @@ void _perror(TCHAR *prefix)
             exit(1);
     }
 
-    _logf(TRUE, FALSE, TEXT("%s%s"), prefix, buffer);
+    _logf(TRUE, FALSE, function_name, TEXT("%s%s"), prefix, buffer);
     SetLastError(error_code); // preserve
 }
 
