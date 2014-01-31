@@ -191,9 +191,9 @@ ULONG MergeWithExistingDacl(HANDLE hObject, ULONG cCountOfExplicitEntries, EXPLI
 
 ULONG GrantDesktopAccess(TCHAR *pszAccountName, TCHAR *pszSystemName)
 {
-    HANDLE hWindowStation;
-    HANDLE hOriginalWindowStation;
-    HANDLE hDesktop;
+    HWINSTA hWindowStation;
+    HWINSTA hOriginalWindowStation;
+    HDESK hDesktop;
     ULONG  uResult;
     PSID   pSid = NULL;
     EXPLICIT_ACCESS NewAccessAllowedAces[2];
