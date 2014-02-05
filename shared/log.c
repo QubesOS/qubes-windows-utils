@@ -281,6 +281,9 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
         free(prefix_buffer_utf8);
     free(buffer_utf8);
 #endif
+#ifdef LOG_SAFE_FLUSH
+    log_flush();
+#endif
     SetLastError(last_error);
 }
 
