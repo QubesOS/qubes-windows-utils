@@ -83,7 +83,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         perror("GetUserName");
         exit(1);
     }
-    logf("Running as user: %s\n", buffer);
+    logf("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
 }
 
 // if logfile_path is NULL, use stderr
@@ -160,7 +160,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
     size_t prefix_buffer_size = 0;
     DWORD last_error = GetLastError(); // preserve last error
 
-#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d] ")
+#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d][%d] ")
 #ifdef UNICODE
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
 #else
@@ -173,7 +173,7 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
         prefix_len = _stprintf_s(prefix_buffer, RTL_NUMBER_OF(prefix_buffer),
             function_name ? PREFIX_FORMAT PREFIX_FORMAT_FUNCNAME : PREFIX_FORMAT,
             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
-            function_name);
+            GetCurrentThreadId(), function_name);
     }
 
     va_start(args, format);
