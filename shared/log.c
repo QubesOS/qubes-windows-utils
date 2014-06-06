@@ -24,9 +24,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     SYSTEMTIME st;
     DWORD len = 0;
     TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
-#if !defined(DEBUG) && !defined(_DEBUG)
     TCHAR appdata_path[MAX_PATH];
-#endif
     TCHAR buffer[MAX_PATH];
 
     GetLocalTime(&st);
@@ -34,9 +32,6 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     // if log_dir is NULL, use default log location
     if (!log_dir)
     {
-#if defined(DEBUG) || defined(_DEBUG)
-        log_dir = TEXT(DEBUG_LOG_DIR);
-#else
         memset(appdata_path, 0, sizeof(appdata_path));
         // use current user's profile directory
         if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata_path)))
@@ -59,7 +54,6 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
             }
         }
         log_dir = appdata_path;
-#endif
     }
 
     memset(buffer, 0, sizeof(buffer));

@@ -5,9 +5,6 @@
 
 // Underscore functions are meant for internal use.
 
-// Used if DEBUG is defined and client requests default log location in log_init.
-#define DEBUG_LOG_DIR "c:\\qubes\\logs"
-
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
 
