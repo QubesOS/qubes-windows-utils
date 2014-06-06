@@ -11,6 +11,9 @@
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
 
+// Use the log directory from registry config.
+DWORD log_init_default(WCHAR *log_name);
+
 // Formats unique log file path and calls log_start.
 // If log_dir is NULL, use default log location (%APPDATA%\Qubes if !DEBUG).
 void log_init(TCHAR *log_dir, TCHAR *base_name);

@@ -5,8 +5,10 @@
 #include <ShlObj.h>
 #include <strsafe.h>
 #include <Lmcons.h>
+
 #include "utf8-conv.h"
 #include "log.h"
+#include "config.h"
 
 static BOOL logger_initialized = FALSE;
 static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
@@ -84,6 +86,28 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         exit(1);
     }
     logf("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
+}
+
+// Use the log directory from registry config.
+DWORD log_init_default(PWCHAR log_name)
+{
+	DWORD status;
+	WCHAR log_path[MAX_PATH];
+
+	status = CfgReadString(REG_CONFIG_LOG_VALUE, log_path, RTL_NUMBER_OF(log_path));
+	if (ERROR_SUCCESS != status)
+	{
+		// failed, use some safe default
+		// todo: use event log
+		log_init(L"c:\\", log_name);
+		perror("CfgReadString(log path)");
+	}
+	else
+	{
+		log_init(log_path, log_name);
+	}
+
+	return status;
 }
 
 // if logfile_path is NULL, use stderr
