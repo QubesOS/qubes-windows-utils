@@ -8,6 +8,9 @@
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
 
+// Logs older than this (seconds) will be deleted.
+#define LOG_RETENTION_TIME (7*24*60*60ULL)
+
 // Use the log directory from registry config.
 DWORD log_init_default(WCHAR *log_name);
 

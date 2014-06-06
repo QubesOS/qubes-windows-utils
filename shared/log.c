@@ -15,9 +15,42 @@ static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
+#define LOG_RETENTION_TIME_100NS (LOG_RETENTION_TIME * 10000000ULL)
+
 #if (UNLEN > LOG_MAX_MESSAGE_LENGTH)
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
+
+void purge_old_logs(TCHAR *log_dir, TCHAR *base_name)
+{
+	FILETIME ft;
+	PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
+	WIN32_FIND_DATA findData;
+	HANDLE findHandle;
+	TCHAR searchMask[MAX_PATH];
+	TCHAR filePath[MAX_PATH];
+
+	GetSystemTimeAsFileTime(&ft);
+	(*thresholdTime).QuadPart -= LOG_RETENTION_TIME_100NS;
+
+	StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), log_dir, base_name);
+
+	findHandle = FindFirstFile(searchMask, &findData);
+	if (findHandle == INVALID_HANDLE_VALUE)
+		return;
+
+	do
+	{
+		if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
+		{
+			// File is too old, delete.
+			PathCombine(filePath, log_dir, findData.cFileName);
+			DeleteFile(filePath);
+		}
+	} while (FindNextFile(findHandle, &findData));
+
+	FindClose(findHandle);
+}
 
 void log_init(TCHAR *log_dir, TCHAR *base_name)
 {
@@ -26,6 +59,8 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
     TCHAR appdata_path[MAX_PATH];
     TCHAR buffer[MAX_PATH];
+
+	purge_old_logs(log_dir, base_name);
 
     GetLocalTime(&st);
 
