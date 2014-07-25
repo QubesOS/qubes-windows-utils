@@ -63,3 +63,34 @@ cleanup:
 
     return status;
 }
+
+// Read a 64-bit value from registry config.
+DWORD CfgReadQword(IN PWCHAR valueName, OUT PLARGE_INTEGER value)
+{
+    HKEY key = NULL;
+    DWORD status;
+    DWORD type;
+    DWORD size;
+
+    SetLastError(status = RegOpenKey(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, &key));
+    if (status != ERROR_SUCCESS)
+        return status;
+
+    size = sizeof(LARGE_INTEGER);
+
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE)value, &size));
+    if (status != ERROR_SUCCESS)
+        goto cleanup;
+
+    if (type != REG_QWORD)
+    {
+        status = ERROR_DATATYPE_MISMATCH;
+        goto cleanup;
+    }
+
+cleanup:
+    if (key)
+        RegCloseKey(key);
+
+    return status;
+}
