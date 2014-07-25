@@ -2,7 +2,7 @@
 #include "log.h"
 
 // Read a string value from registry config.
-DWORD CfgReadString(IN PWCHAR valueName, OUT PWCHAR value, IN DWORD valueLength)
+DWORD CfgReadString(const IN PWCHAR valueName, OUT PWCHAR value, IN DWORD valueLength)
 {
     HKEY key = NULL;
     DWORD status;
@@ -34,7 +34,7 @@ cleanup:
 }
 
 // Read a DWORD value from registry config.
-DWORD CfgReadDword(IN PWCHAR valueName, OUT PDWORD value)
+DWORD CfgReadDword(const IN PWCHAR valueName, OUT PDWORD value)
 {
     HKEY key = NULL;
     DWORD status;
@@ -65,7 +65,7 @@ cleanup:
 }
 
 // Read a 64-bit value from registry config.
-DWORD CfgReadQword(IN PWCHAR valueName, OUT PLARGE_INTEGER value)
+DWORD CfgReadQword(const IN PWCHAR valueName, OUT PLARGE_INTEGER value)
 {
     HKEY key = NULL;
     DWORD status;
