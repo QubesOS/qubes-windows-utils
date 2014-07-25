@@ -23,33 +23,33 @@ static HANDLE logfile_handle = INVALID_HANDLE_VALUE;
 
 void purge_old_logs(TCHAR *log_dir, TCHAR *base_name)
 {
-	FILETIME ft;
-	PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
-	WIN32_FIND_DATA findData;
-	HANDLE findHandle;
-	TCHAR searchMask[MAX_PATH];
-	TCHAR filePath[MAX_PATH];
+    FILETIME ft;
+    PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
+    WIN32_FIND_DATA findData;
+    HANDLE findHandle;
+    TCHAR searchMask[MAX_PATH];
+    TCHAR filePath[MAX_PATH];
 
-	GetSystemTimeAsFileTime(&ft);
-	(*thresholdTime).QuadPart -= LOG_RETENTION_TIME_100NS;
+    GetSystemTimeAsFileTime(&ft);
+    (*thresholdTime).QuadPart -= LOG_RETENTION_TIME_100NS;
 
-	StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), log_dir, base_name);
+    StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), log_dir, base_name);
 
-	findHandle = FindFirstFile(searchMask, &findData);
-	if (findHandle == INVALID_HANDLE_VALUE)
-		return;
+    findHandle = FindFirstFile(searchMask, &findData);
+    if (findHandle == INVALID_HANDLE_VALUE)
+        return;
 
-	do
-	{
-		if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
-		{
-			// File is too old, delete.
-			PathCombine(filePath, log_dir, findData.cFileName);
-			DeleteFile(filePath);
-		}
-	} while (FindNextFile(findHandle, &findData));
+    do
+    {
+        if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
+        {
+            // File is too old, delete.
+            PathCombine(filePath, log_dir, findData.cFileName);
+            DeleteFile(filePath);
+        }
+    } while (FindNextFile(findHandle, &findData));
 
-	FindClose(findHandle);
+    FindClose(findHandle);
 }
 
 void log_init(TCHAR *log_dir, TCHAR *base_name)
@@ -60,7 +60,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     TCHAR appdata_path[MAX_PATH];
     TCHAR buffer[MAX_PATH];
 
-	purge_old_logs(log_dir, base_name);
+    purge_old_logs(log_dir, base_name);
 
     GetLocalTime(&st);
 
@@ -120,23 +120,23 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 // Use the log directory from registry config.
 DWORD log_init_default(PWCHAR log_name)
 {
-	DWORD status;
-	WCHAR log_path[MAX_PATH];
+    DWORD status;
+    WCHAR log_path[MAX_PATH];
 
-	status = CfgReadString(REG_CONFIG_LOG_VALUE, log_path, RTL_NUMBER_OF(log_path));
-	if (ERROR_SUCCESS != status)
-	{
-		// failed, use some safe default
-		// todo: use event log
-		log_init(L"c:\\", log_name);
-		perror("CfgReadString(log path)");
-	}
-	else
-	{
-		log_init(log_path, log_name);
-	}
+    status = CfgReadString(REG_CONFIG_LOG_VALUE, log_path, RTL_NUMBER_OF(log_path));
+    if (ERROR_SUCCESS != status)
+    {
+        // failed, use some safe default
+        // todo: use event log
+        log_init(L"c:\\", log_name);
+        perror("CfgReadString(log path)");
+    }
+    else
+    {
+        log_init(log_path, log_name);
+    }
 
-	return status;
+    return status;
 }
 
 // if logfile_path is NULL, use stderr
