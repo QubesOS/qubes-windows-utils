@@ -11,6 +11,9 @@
 // Maximum characters for a module name.
 #define CFG_MODULE_MAX (CFG_PATH_MAX - RTL_NUMBER_OF(REG_CONFIG_KEY) - 1)
 
+// Get current executable's module name (base file name without extension).
+DWORD CfgGetModuleName(OUT PWCHAR moduleName, IN DWORD moduleNameLength);
+
 // Read a string value from registry config.
 DWORD CfgReadString(const IN PWCHAR moduleName, const IN PWCHAR valueName, OUT PWCHAR value, IN DWORD valueLength, OUT OPTIONAL PBOOL rootFallback);
 

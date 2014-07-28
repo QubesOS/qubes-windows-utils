@@ -138,27 +138,20 @@ DWORD LogInitDefault(TCHAR *logName)
 {
     DWORD status;
     TCHAR logPath[MAX_PATH];
-    TCHAR exePath[MAX_PATH];
+    TCHAR moduleName[MAX_PATH];
 
     if (!logName)
     {
-        if (!GetModuleFileName(NULL, exePath, RTL_NUMBER_OF(exePath)))
+        status = CfgGetModuleName(moduleName, RTL_NUMBER_OF(moduleName));
+        if (ERROR_SUCCESS != status)
         {
-            status = GetLastError();
-            goto fallback;
-        }
-        PathRemoveExtension(exePath);
-        logName = PathFindFileName(exePath);
-        if (logName == exePath) // failed
-        {
-            status = ERROR_INVALID_NAME;
-
-        fallback:
             // log to stderr only
             LogStart(NULL);
             LogGetLevel();
             return status;
         }
+
+        logName = moduleName;
     }
 
     status = CfgReadString(logName, LOG_CONFIG_PATH_VALUE, logPath, RTL_NUMBER_OF(logPath), NULL);

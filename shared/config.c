@@ -1,8 +1,37 @@
 #include <Windows.h>
+#include <Shlwapi.h>
 #include <strsafe.h>
 
 #include "config.h"
-#include "log.h"
+
+// Get current executable's module name (base file name without extension).
+DWORD CfgGetModuleName(OUT PWCHAR moduleName, IN DWORD moduleNameLength)
+{
+    WCHAR exePath[MAX_PATH], *exeName;
+    DWORD status = ERROR_SUCCESS;
+
+    if (!GetModuleFileName(NULL, exePath, RTL_NUMBER_OF(exePath)))
+    {
+        status = GetLastError();
+        goto cleanup;
+    }
+    PathRemoveExtension(exePath);
+    exeName = PathFindFileName(exePath);
+    if (exeName == exePath) // failed
+    {
+        status = ERROR_INVALID_NAME;
+        goto cleanup;
+    }
+
+    if (FAILED(StringCchCopy(moduleName, moduleNameLength, exeName)))
+    {
+        status = ERROR_INVALID_DATA;
+    }
+
+cleanup:
+    SetLastError(status);
+    return status;
+}
 
 DWORD CfgOpenKey(const IN OPTIONAL PWCHAR moduleName, OUT PHKEY key, OUT OPTIONAL PBOOL rootFallback)
 {
