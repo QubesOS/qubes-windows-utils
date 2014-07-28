@@ -124,9 +124,12 @@ fallback:
     if (!GetUserName(buffer, &len))
     {
         perror("GetUserName");
-        exit(1);
+        logf("Running as user: <UNKNOWN>, process ID: %d\n", GetCurrentProcessId());
     }
-    logf("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
+    else
+    {
+        logf("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
+    }
 }
 
 // Use the log directory from registry config.
@@ -182,7 +185,7 @@ DWORD LogInitDefault(TCHAR *logName)
 void LogStart(TCHAR *logfilePath)
 {
     BYTE utf8Bom[3] = { 0xEF, 0xBB, 0xBF };
-    DWORD len;
+    DWORD len, status = ERROR_SUCCESS;
 
     if (!g_LoggerInitialized)
     {
@@ -199,31 +202,41 @@ void LogStart(TCHAR *logfilePath)
 
             if (g_LogfileHandle == INVALID_HANDLE_VALUE)
             {
+                status = GetLastError();
                 _ftprintf(stderr, TEXT("log_start: CreateFile(%s) failed: error %d\n"),
                     logfilePath, GetLastError());
-                exit(1);
+                goto fallback;
             }
 
             // seek to end
             len = SetFilePointer(g_LogfileHandle, 0, 0, SEEK_END);
             if (INVALID_SET_FILE_POINTER == len)
             {
+                status = GetLastError();
                 _ftprintf(stderr, TEXT("log_start: SetFilePointer(%s) failed: error %d\n"),
                     logfilePath, GetLastError());
-                exit(1);
+                goto fallback;
             }
 
             if (len == 0) // fresh file - write BOM
             {
                 if (!WriteFile(g_LogfileHandle, utf8Bom, 3, &len, NULL))
                 {
+                    status = GetLastError();
                     _ftprintf(stderr, TEXT("log_start: WriteFile(%s) failed: error %d\n"),
                         logfilePath, GetLastError());
-                    exit(1);
+                    goto fallback;
                 }
             }
         }
     }
+fallback:
+    if (status != ERROR_SUCCESS && g_LogfileHandle != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(g_LogfileHandle);
+        g_LogfileHandle = INVALID_HANDLE_VALUE;
+    }
+
     g_LoggerInitialized = TRUE;
 }
 
@@ -284,15 +297,15 @@ void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format,
         if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, &prefixBufferUtf8, &prefixBufferSize))
         {
             _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
-            exit(1);
+            goto cleanup;
         }
     }
 
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &bufferUtf8, &bufferSize))
     {
         _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
-        exit(1);
-    }
+        goto cleanup;
+}
     if (bufferUtf8[bufferSize - 1] != '\n')
         addNewline = TRUE;
 #else
@@ -313,7 +326,7 @@ void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format,
 #endif
             {
                 _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
-                exit(1);
+                goto cleanup;
             }
         }
 
@@ -325,7 +338,7 @@ void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format,
 #endif
         {
             _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
-            exit(1);
+            goto cleanup;
         }
 
         if (addNewline && !raw)
@@ -333,7 +346,7 @@ void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format,
             if (!WriteFile(g_LogfileHandle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
             {
                 _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
-                exit(1);
+                goto cleanup;
             }
         }
 
@@ -371,6 +384,8 @@ void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format,
         }
     }
 
+cleanup:
+
 #ifdef UNICODE
     if (!raw)
         free(prefixBufferUtf8);
@@ -404,10 +419,11 @@ DWORD _perror(const char *functionName, TCHAR *prefix)
         (TCHAR*)&message,
         0,
         NULL);
+
     if (!charCount)
     {
         if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), TEXT(" failed with error 0x%08x\n"), errorCode)))
-            exit(1);
+            goto cleanup;
     }
     else
     {
@@ -421,10 +437,11 @@ DWORD _perror(const char *functionName, TCHAR *prefix)
         LocalFree(message);
 
         if (FAILED(ret))
-            exit(1);
+            goto cleanup;
     }
 
     _logf(TRUE, FALSE, functionName, TEXT("%s%s"), prefix, buffer);
+cleanup:
     SetLastError(errorCode); // preserve
     return errorCode;
 }
