@@ -22,7 +22,7 @@ static TCHAR g_LogName[CFG_MODULE_MAX];
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
 
-void purge_old_logs(TCHAR *log_dir)
+static void PurgeOldLogs(TCHAR *logDir)
 {
     FILETIME ft;
     PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
@@ -34,7 +34,7 @@ void purge_old_logs(TCHAR *log_dir)
     GetSystemTimeAsFileTime(&ft);
     (*thresholdTime).QuadPart -= LOG_RETENTION_TIME_100NS;
 
-    StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), log_dir, g_LogName);
+    StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), logDir, g_LogName);
 
     findHandle = FindFirstFile(searchMask, &findData);
     if (findHandle == INVALID_HANDLE_VALUE)
@@ -45,7 +45,7 @@ void purge_old_logs(TCHAR *log_dir)
         if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
         {
             // File is too old, delete.
-            StringCchPrintf(filePath, RTL_NUMBER_OF(filePath), TEXT("%s\\%s"), log_dir, findData.cFileName);
+            StringCchPrintf(filePath, RTL_NUMBER_OF(filePath), TEXT("%s\\%s"), logDir, findData.cFileName);
             DeleteFile(filePath);
         }
     } while (FindNextFile(findHandle, &findData));
@@ -53,59 +53,59 @@ void purge_old_logs(TCHAR *log_dir)
     FindClose(findHandle);
 }
 
-void get_log_level(void)
+void LogGetLevel(void)
 {
-    DWORD status;
+    DWORD status; 
     status = CfgReadDword(g_LogName, LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
 
     if (status != ERROR_SUCCESS)
         g_LogLevel = LOG_LEVEL_ERROR; // default
 }
 
-void log_init(TCHAR *log_dir, TCHAR *base_name)
+void LogInit(TCHAR *logDir, TCHAR *baseName)
 {
     SYSTEMTIME st;
     DWORD len = 0;
     TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
-    TCHAR system_path[MAX_PATH];
+    TCHAR systemPath[MAX_PATH];
     TCHAR buffer[MAX_PATH];
 
-    StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), base_name);
+    StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), baseName);
 
-    // if log_dir is NULL, use default log location
-    if (!log_dir)
+    // if logDir is NULL, use default log location
+    if (!logDir)
     {
         // Prepare default log path (%SYSTEMDRIVE%\QubesLogs)
         GetLocalTime(&st);
 
-        if (!GetSystemDirectory(system_path, RTL_NUMBER_OF(system_path)))
+        if (!GetSystemDirectory(systemPath, RTL_NUMBER_OF(systemPath)))
         {
             perror("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             goto fallback;
         }
-        if (FAILED(StringCchCopy(system_path + 3, RTL_NUMBER_OF(system_path) - 3, TEXT("QubesLogs\0"))))
+        if (FAILED(StringCchCopy(systemPath + 3, RTL_NUMBER_OF(systemPath) - 3, TEXT("QubesLogs\0"))))
         {
             errorf("StringCchCopy failed");
             goto fallback;
         }
-        if (!CreateDirectory(system_path, NULL))
+        if (!CreateDirectory(systemPath, NULL))
         {
             if (GetLastError() != ERROR_ALREADY_EXISTS)
             {
                 perror("CreateDirectory");
-                errorf("failed to create %s\n", system_path);
+                errorf("failed to create %s\n", systemPath);
                 goto fallback;
             }
         }
-        log_dir = system_path;
+        logDir = systemPath;
     }
 
-    purge_old_logs(log_dir);
+    PurgeOldLogs(logDir);
 
     memset(buffer, 0, sizeof(buffer));
     if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer),
         format,
-        log_dir, base_name, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
+        logDir, baseName, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
         GetCurrentProcessId()
         )))
     {
@@ -113,7 +113,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         goto fallback;
     }
 
-    log_start(buffer);
+    LogStart(buffer);
 
 fallback:
     logf("\nLog started: %s\n", buffer);
@@ -131,65 +131,65 @@ fallback:
 
 // Use the log directory from registry config.
 // If log_name is NULL, use current executable as name.
-DWORD log_init_default(TCHAR *log_name)
+DWORD LogInitDefault(TCHAR *logName)
 {
     DWORD status;
-    TCHAR log_path[MAX_PATH];
-    TCHAR exe_path[MAX_PATH];
+    TCHAR logPath[MAX_PATH];
+    TCHAR exePath[MAX_PATH];
 
-    if (!log_name)
+    if (!logName)
     {
-        if (!GetModuleFileName(NULL, exe_path, RTL_NUMBER_OF(exe_path)))
+        if (!GetModuleFileName(NULL, exePath, RTL_NUMBER_OF(exePath)))
         {
             status = GetLastError();
             goto fallback;
         }
-        PathRemoveExtension(exe_path);
-        log_name = PathFindFileName(exe_path);
-        if (log_name == exe_path) // failed
+        PathRemoveExtension(exePath);
+        logName = PathFindFileName(exePath);
+        if (logName == exePath) // failed
         {
             status = ERROR_INVALID_NAME;
 
         fallback:
             // log to stderr only
-            log_start(NULL);
-            get_log_level();
+            LogStart(NULL);
+            LogGetLevel();
             return status;
         }
     }
 
-    status = CfgReadString(log_name, LOG_CONFIG_PATH_VALUE, log_path, RTL_NUMBER_OF(log_path), NULL);
+    status = CfgReadString(logName, LOG_CONFIG_PATH_VALUE, logPath, RTL_NUMBER_OF(logPath), NULL);
     if (ERROR_SUCCESS != status)
     {
         // failed, use default location
         // todo: use event log
-        log_init(NULL, log_name);
+        LogInit(NULL, logName);
         SetLastError(status);
         perror("CfgReadString(log path)");
     }
     else
     {
-        log_init(log_path, log_name);
+        LogInit(logPath, logName);
     }
 
-    get_log_level();
+    LogGetLevel();
 
     return status;
 }
 
 // create the log file
 // if logfile_path is NULL, use stderr
-void log_start(TCHAR *logfile_path)
+void LogStart(TCHAR *logfilePath)
 {
-    BYTE utf8_bom[3] = { 0xEF, 0xBB, 0xBF };
+    BYTE utf8Bom[3] = { 0xEF, 0xBB, 0xBF };
     DWORD len;
 
     if (!g_LoggerInitialized)
     {
-        if (logfile_path)
+        if (logfilePath)
         {
             g_LogfileHandle = CreateFile(
-                logfile_path,
+                logfilePath,
                 GENERIC_WRITE,
                 FILE_SHARE_READ,
                 NULL, // fixme: security attrs
@@ -200,7 +200,7 @@ void log_start(TCHAR *logfile_path)
             if (g_LogfileHandle == INVALID_HANDLE_VALUE)
             {
                 _ftprintf(stderr, TEXT("log_start: CreateFile(%s) failed: error %d\n"),
-                    logfile_path, GetLastError());
+                    logfilePath, GetLastError());
                 exit(1);
             }
 
@@ -209,16 +209,16 @@ void log_start(TCHAR *logfile_path)
             if (INVALID_SET_FILE_POINTER == len)
             {
                 _ftprintf(stderr, TEXT("log_start: SetFilePointer(%s) failed: error %d\n"),
-                    logfile_path, GetLastError());
+                    logfilePath, GetLastError());
                 exit(1);
             }
 
             if (len == 0) // fresh file - write BOM
             {
-                if (!WriteFile(g_LogfileHandle, utf8_bom, 3, &len, NULL))
+                if (!WriteFile(g_LogfileHandle, utf8Bom, 3, &len, NULL))
                 {
                     _ftprintf(stderr, TEXT("log_start: WriteFile(%s) failed: error %d\n"),
-                        logfile_path, GetLastError());
+                        logfilePath, GetLastError());
                     exit(1);
                 }
             }
@@ -227,33 +227,33 @@ void log_start(TCHAR *logfile_path)
     g_LoggerInitialized = TRUE;
 }
 
-void log_flush()
+void LogFlush()
 {
     if (g_LoggerInitialized && g_LogfileHandle != INVALID_HANDLE_VALUE)
         FlushFileBuffers(g_LogfileHandle);
 }
 
-void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *format, ...)
+void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format, ...)
 {
     va_list args;
-    size_t buffer_size = 0;
+    size_t bufferSize = 0;
     DWORD written = 0;
     SYSTEMTIME st;
-    TCHAR prefix_buffer[256];
-    int prefix_len = 0;
+    TCHAR prefixBuffer[256];
+    int prefixLen = 0;
     TCHAR buffer[BUFFER_SIZE];
     char *newline = "\n";
 #define NEWLINE_LEN 1
-    BOOL add_newline = FALSE;
+    BOOL addNewline = FALSE;
 #ifdef UNICODE
-    char *buffer_utf8 = NULL;
-    char *prefix_buffer_utf8 = NULL;
+    char *bufferUtf8 = NULL;
+    char *prefixBufferUtf8 = NULL;
 #endif
-    size_t prefix_buffer_size = 0;
-    DWORD last_error = GetLastError(); // preserve last error
+    size_t prefixBufferSize = 0;
+    DWORD lastError = GetLastError(); // preserve last error
 
     if (!g_LoggerInitialized)
-        log_init_default(NULL);
+        LogInitDefault(NULL);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d][%d] ")
 #ifdef UNICODE
@@ -263,38 +263,38 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
 #endif
     if (!raw)
     {
-        memset(prefix_buffer, 0, sizeof(prefix_buffer));
+        memset(prefixBuffer, 0, sizeof(prefixBuffer));
         GetLocalTime(&st); // or system time (UTC)?
-        prefix_len = _stprintf_s(prefix_buffer, RTL_NUMBER_OF(prefix_buffer),
-            function_name ? PREFIX_FORMAT PREFIX_FORMAT_FUNCNAME : PREFIX_FORMAT,
+        prefixLen = _stprintf_s(prefixBuffer, RTL_NUMBER_OF(prefixBuffer),
+            functionName ? PREFIX_FORMAT PREFIX_FORMAT_FUNCNAME : PREFIX_FORMAT,
             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
-            GetCurrentThreadId(), function_name);
+            GetCurrentThreadId(), functionName);
     }
 
     va_start(args, format);
 
     memset(buffer, 0, sizeof(buffer));
     // format buffer
-    buffer_size = _vstprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(TCHAR);
+    bufferSize = _vstprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(TCHAR);
     va_end(args);
 
 #ifdef UNICODE
     if (!raw)
     {
-        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefix_buffer, &prefix_buffer_utf8, &prefix_buffer_size))
+        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, &prefixBufferUtf8, &prefixBufferSize))
         {
             _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
             exit(1);
         }
     }
 
-    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &buffer_utf8, &buffer_size))
+    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &bufferUtf8, &bufferSize))
     {
         _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
         exit(1);
     }
-    if (buffer_utf8[buffer_size - 1] != '\n')
-        add_newline = TRUE;
+    if (bufferUtf8[bufferSize - 1] != '\n')
+        addNewline = TRUE;
 #else
     if (buffer[buffer_size-1] != '\n')
         add_newline = TRUE;
@@ -307,9 +307,9 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
         if (!raw)
         {
 #ifdef UNICODE
-            if (!WriteFile(g_LogfileHandle, prefix_buffer_utf8, (DWORD)prefix_buffer_size, &written, NULL) || written != (DWORD)prefix_buffer_size)
+            if (!WriteFile(g_LogfileHandle, prefixBufferUtf8, (DWORD)prefixBufferSize, &written, NULL) || written != (DWORD)prefixBufferSize)
 #else
-            if (!WriteFile(g_LogfileHandle, prefix_buffer, (DWORD)prefix_buffer_size, &written, NULL) || written != (DWORD)prefix_buffer_size)
+            if (!WriteFile(g_LogfileHandle, prefixBuffer, (DWORD)prefixBufferSize, &written, NULL) || written != (DWORD)prefixBufferSize)
 #endif
             {
                 _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
@@ -319,16 +319,16 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
 
         // buffer_size is at most INT_MAX*2
 #ifdef UNICODE
-        if (!WriteFile(g_LogfileHandle, buffer_utf8, (DWORD)buffer_size, &written, NULL) || written != (DWORD)buffer_size)
+        if (!WriteFile(g_LogfileHandle, bufferUtf8, (DWORD)bufferSize, &written, NULL) || written != (DWORD)bufferSize)
 #else
-        if (!WriteFile(g_LogfileHandle, buffer, (DWORD)buffer_size, &written, NULL) || written != (DWORD)buffer_size)
+        if (!WriteFile(g_LogfileHandle, buffer, (DWORD)bufferSize, &written, NULL) || written != (DWORD)bufferSize)
 #endif
         {
             _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
             exit(1);
         }
 
-        if (add_newline && !raw)
+        if (addNewline && !raw)
         {
             if (!WriteFile(g_LogfileHandle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
             {
@@ -337,12 +337,12 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
             }
         }
 
-        if (echo_to_stderr)
+        if (echoToStderr)
         {
             if (!raw)
-                _ftprintf(stderr, prefix_buffer);
+                _ftprintf(stderr, prefixBuffer);
             _ftprintf(stderr, buffer);
-            if (add_newline && !raw)
+            if (addNewline && !raw)
             {
 #ifdef UNICODE
                 _ftprintf(stderr, TEXT("%S"), newline);
@@ -359,9 +359,9 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
     else // use stderr
     {
         if (!raw)
-            _ftprintf(stderr, TEXT("%s"), prefix_buffer);
+            _ftprintf(stderr, TEXT("%s"), prefixBuffer);
         _ftprintf(stderr, TEXT("%s"), buffer);
-        if (add_newline && !raw)
+        if (addNewline && !raw)
         {
 #ifdef UNICODE
             _ftprintf(stderr, TEXT("%S"), newline);
@@ -373,38 +373,40 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
 
 #ifdef UNICODE
     if (!raw)
-        free(prefix_buffer_utf8);
-    free(buffer_utf8);
+        free(prefixBufferUtf8);
+    free(bufferUtf8);
 #endif
+
 #ifdef LOG_SAFE_FLUSH
-    log_flush();
+    LogFlush();
 #endif
-    SetLastError(last_error);
+
+    SetLastError(lastError);
 }
 
 // Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno.
-DWORD _perror(const char *function_name, TCHAR *prefix)
+DWORD _perror(const char *functionName, TCHAR *prefix)
 {
-    size_t  char_count;
+    size_t  charCount;
     TCHAR  *message = NULL;
     TCHAR   buffer[2048];
     HRESULT ret;
-    DWORD   error_code;
+    DWORD   errorCode;
 
-    error_code = GetLastError();
+    errorCode = GetLastError();
 
     memset(buffer, 0, sizeof(buffer));
-    char_count = FormatMessage(
+    charCount = FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
-        error_code,
+        errorCode,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (TCHAR*)&message,
         0,
         NULL);
-    if (!char_count)
+    if (!charCount)
     {
-        if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), TEXT(" failed with error 0x%08x\n"), error_code)))
+        if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), TEXT(" failed with error 0x%08x\n"), errorCode)))
             exit(1);
     }
     else
@@ -413,18 +415,18 @@ DWORD _perror(const char *function_name, TCHAR *prefix)
             buffer,
             RTL_NUMBER_OF(buffer),
             TEXT(" failed with error %d: %s%s"),
-            error_code,
+            errorCode,
             message,
-            ((char_count >= 1) && (0x0a == message[char_count - 1])) ? TEXT("") : TEXT("\n"));
+            ((charCount >= 1) && (0x0a == message[charCount - 1])) ? TEXT("") : TEXT("\n"));
         LocalFree(message);
 
         if (FAILED(ret))
             exit(1);
     }
 
-    _logf(TRUE, FALSE, function_name, TEXT("%s%s"), prefix, buffer);
-    SetLastError(error_code); // preserve
-    return error_code;
+    _logf(TRUE, FALSE, functionName, TEXT("%s%s"), prefix, buffer);
+    SetLastError(errorCode); // preserve
+    return errorCode;
 }
 
 // disabled if LOG_NO_HEX_DUMP is defined

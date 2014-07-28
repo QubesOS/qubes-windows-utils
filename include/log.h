@@ -27,17 +27,17 @@ enum
 } LOG_LEVEL;
 
 // Use the log directory and log level from registry config.
-DWORD log_init_default(WCHAR *log_name);
+DWORD LogInitDefault(WCHAR *logName);
 
 // Formats unique log file path and calls log_start.
 // If log_dir is NULL, use default log location (%SYSTEMDRIVE%\QubesLogs).
-void log_init(TCHAR *log_dir, TCHAR *base_name);
+void LogInit(TCHAR *log_dir, TCHAR *base_name);
 
 // If logfile_path is NULL, use stderr.
-void log_start(TCHAR *logfile_path);
+void LogStart(TCHAR *logfile_path);
 
 // Set verbosity level.
-void log_set_verbosity(int level);
+void LogSetVerbosity(int level);
 
 void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *format, ...);
 // *_raw functions omit the timestamp, function name prefix and don't append newlines automatically.
