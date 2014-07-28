@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <strsafe.h>
 #include <Lmcons.h>
+#include <Shlwapi.h>
 
 #include "utf8-conv.h"
 #include "log.h"
@@ -71,18 +72,18 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
 
     StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), base_name);
 
-    GetLocalTime(&st);
-
     // if log_dir is NULL, use default log location
     if (!log_dir)
     {
         // Prepare default log path (%SYSTEMDRIVE%\QubesLogs)
+        GetLocalTime(&st);
+
         if (!GetSystemDirectory(system_path, RTL_NUMBER_OF(system_path)))
         {
             perror("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             goto fallback;
         }
-        if (FAILED(StringCchCopy(system_path+3, RTL_NUMBER_OF(system_path)-3, TEXT("QubesLogs\0"))))
+        if (FAILED(StringCchCopy(system_path + 3, RTL_NUMBER_OF(system_path) - 3, TEXT("QubesLogs\0"))))
         {
             errorf("StringCchCopy failed");
             goto fallback;
@@ -129,10 +130,33 @@ fallback:
 }
 
 // Use the log directory from registry config.
-DWORD log_init_default(PWCHAR log_name)
+// If log_name is NULL, use current executable as name.
+DWORD log_init_default(TCHAR *log_name)
 {
     DWORD status;
-    WCHAR log_path[MAX_PATH];
+    TCHAR log_path[MAX_PATH];
+    TCHAR exe_path[MAX_PATH];
+
+    if (!log_name)
+    {
+        if (!GetModuleFileName(NULL, exe_path, RTL_NUMBER_OF(exe_path)))
+        {
+            status = GetLastError();
+            goto fallback;
+        }
+        PathRemoveExtension(exe_path);
+        log_name = PathFindFileName(exe_path);
+        if (log_name == exe_path) // failed
+        {
+            status = ERROR_INVALID_NAME;
+
+        fallback:
+            // log to stderr only
+            log_start(NULL);
+            get_log_level();
+            return status;
+        }
+    }
 
     status = CfgReadString(log_name, LOG_CONFIG_PATH_VALUE, log_path, RTL_NUMBER_OF(log_path), NULL);
     if (ERROR_SUCCESS != status)
@@ -140,6 +164,7 @@ DWORD log_init_default(PWCHAR log_name)
         // failed, use default location
         // todo: use event log
         log_init(NULL, log_name);
+        SetLastError(status);
         perror("CfgReadString(log path)");
     }
     else
@@ -226,6 +251,9 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
 #endif
     size_t prefix_buffer_size = 0;
     DWORD last_error = GetLastError(); // preserve last error
+
+    if (!g_LoggerInitialized)
+        log_init_default(NULL);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d][%d] ")
 #ifdef UNICODE
