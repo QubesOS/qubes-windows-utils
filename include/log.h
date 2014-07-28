@@ -30,7 +30,7 @@ enum
 DWORD log_init_default(WCHAR *log_name);
 
 // Formats unique log file path and calls log_start.
-// If log_dir is NULL, use default log location (%APPDATA%\Qubes).
+// If log_dir is NULL, use default log location (%SYSTEMDRIVE%\QubesLogs).
 void log_init(TCHAR *log_dir, TCHAR *base_name);
 
 // If logfile_path is NULL, use stderr.

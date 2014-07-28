@@ -1,8 +1,6 @@
 #include <tchar.h>
 #include <windows.h>
 #include <stdlib.h>
-#include <Shlwapi.h>
-#include <ShlObj.h>
 #include <strsafe.h>
 #include <Lmcons.h>
 
@@ -46,7 +44,7 @@ void purge_old_logs(TCHAR *log_dir)
         if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
         {
             // File is too old, delete.
-            PathCombine(filePath, log_dir, findData.cFileName);
+            StringCchPrintf(filePath, RTL_NUMBER_OF(filePath), TEXT("%s\\%s"), log_dir, findData.cFileName);
             DeleteFile(filePath);
         }
     } while (FindNextFile(findHandle, &findData));
@@ -68,7 +66,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     SYSTEMTIME st;
     DWORD len = 0;
     TCHAR *format = TEXT("%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log");
-    TCHAR appdata_path[MAX_PATH];
+    TCHAR system_path[MAX_PATH];
     TCHAR buffer[MAX_PATH];
 
     StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), base_name);
@@ -78,28 +76,27 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
     // if log_dir is NULL, use default log location
     if (!log_dir)
     {
-        memset(appdata_path, 0, sizeof(appdata_path));
-        // use current user's profile directory
-        if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata_path)))
+        // Prepare default log path (%SYSTEMDRIVE%\QubesLogs)
+        if (!GetSystemDirectory(system_path, RTL_NUMBER_OF(system_path)))
         {
-            perror("SHGetFolderPath"); // this will just write to stderr before logfile is initialized
+            perror("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             exit(1);
         }
-        if (!PathAppend(appdata_path, TEXT("Qubes"))) // PathCchAppend requires win 8...
+        if (FAILED(StringCchCopy(system_path+3, RTL_NUMBER_OF(system_path)-3, TEXT("QubesLogs\0"))))
         {
-            perror("PathAppend");
+            errorf("StringCchCopy failed");
             exit(1);
         }
-        if (!CreateDirectory(appdata_path, NULL))
+        if (!CreateDirectory(system_path, NULL))
         {
             if (GetLastError() != ERROR_ALREADY_EXISTS)
             {
                 perror("CreateDirectory");
-                errorf("failed to create %s\n", appdata_path);
+                errorf("failed to create %s\n", system_path);
                 exit(1);
             }
         }
-        log_dir = appdata_path;
+        log_dir = system_path;
     }
 
     purge_old_logs(log_dir);
@@ -139,9 +136,9 @@ DWORD log_init_default(PWCHAR log_name)
     status = CfgReadString(log_name, LOG_CONFIG_PATH_VALUE, log_path, RTL_NUMBER_OF(log_path), NULL);
     if (ERROR_SUCCESS != status)
     {
-        // failed, use some safe default
+        // failed, use default location
         // todo: use event log
-        log_init(L"c:\\", log_name);
+        log_init(NULL, log_name);
         perror("CfgReadString(log path)");
     }
     else
