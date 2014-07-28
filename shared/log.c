@@ -58,7 +58,7 @@ void get_log_level(void)
     status = CfgReadDword(g_LogName, LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
 
     if (status != ERROR_SUCCESS)
-        g_LogLevel = LOG_LEVEL_ERROR;
+        g_LogLevel = LOG_LEVEL_ERROR; // default
 }
 
 void log_init(TCHAR *log_dir, TCHAR *base_name)
@@ -80,12 +80,12 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         if (!GetSystemDirectory(system_path, RTL_NUMBER_OF(system_path)))
         {
             perror("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
-            exit(1);
+            goto fallback;
         }
         if (FAILED(StringCchCopy(system_path+3, RTL_NUMBER_OF(system_path)-3, TEXT("QubesLogs\0"))))
         {
             errorf("StringCchCopy failed");
-            exit(1);
+            goto fallback;
         }
         if (!CreateDirectory(system_path, NULL))
         {
@@ -93,7 +93,7 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
             {
                 perror("CreateDirectory");
                 errorf("failed to create %s\n", system_path);
-                exit(1);
+                goto fallback;
             }
         }
         log_dir = system_path;
@@ -108,12 +108,13 @@ void log_init(TCHAR *log_dir, TCHAR *base_name)
         GetCurrentProcessId()
         )))
     {
-        perror("StringCchPrintf");
-        exit(1);
+        errorf("StringCchPrintf(full path) failed");
+        goto fallback;
     }
 
     log_start(buffer);
 
+fallback:
     logf("\nLog started: %s\n", buffer);
     memset(buffer, 0, sizeof(buffer));
 
@@ -203,7 +204,7 @@ void log_start(TCHAR *logfile_path)
 
 void log_flush()
 {
-    if (g_LoggerInitialized)
+    if (g_LoggerInitialized && g_LogfileHandle != INVALID_HANDLE_VALUE)
         FlushFileBuffers(g_LogfileHandle);
 }
 
