@@ -22,7 +22,7 @@ static TCHAR g_LogName[CFG_MODULE_MAX];
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
 
-static void PurgeOldLogs(TCHAR *logDir)
+static void PurgeOldLogs(const IN TCHAR *logDir)
 {
     FILETIME ft;
     PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
@@ -62,7 +62,7 @@ void LogGetLevel(void)
         g_LogLevel = LOG_LEVEL_ERROR; // default
 }
 
-void LogInit(TCHAR *logDir, TCHAR *baseName)
+void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
 {
     SYSTEMTIME st;
     DWORD len = 0;
@@ -133,8 +133,8 @@ fallback:
 }
 
 // Use the log directory from registry config.
-// If log_name is NULL, use current executable as name.
-DWORD LogInitDefault(TCHAR *logName)
+// If logName is NULL, use current executable as name.
+DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName)
 {
     DWORD status;
     TCHAR logPath[MAX_PATH];
@@ -175,7 +175,7 @@ DWORD LogInitDefault(TCHAR *logName)
 
 // create the log file
 // if logfile_path is NULL, use stderr
-void LogStart(TCHAR *logfilePath)
+void LogStart(const IN OPTIONAL TCHAR *logfilePath)
 {
     BYTE utf8Bom[3] = { 0xEF, 0xBB, 0xBF };
     DWORD len, status = ERROR_SUCCESS;
@@ -233,13 +233,13 @@ fallback:
     g_LoggerInitialized = TRUE;
 }
 
-void LogFlush()
+void LogFlush(void)
 {
     if (g_LoggerInitialized && g_LogfileHandle != INVALID_HANDLE_VALUE)
         FlushFileBuffers(g_LogfileHandle);
 }
 
-void _logf(BOOL echoToStderr, BOOL raw, const char *functionName, TCHAR *format, ...)
+void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const IN TCHAR *format, ...)
 {
     va_list args;
     size_t bufferSize = 0;
@@ -393,7 +393,7 @@ cleanup:
 }
 
 // Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno.
-DWORD _perror(const char *functionName, TCHAR *prefix)
+DWORD _perror(const IN char *functionName, const IN TCHAR *prefix)
 {
     size_t  charCount;
     TCHAR  *message = NULL;
@@ -440,7 +440,7 @@ cleanup:
 }
 
 // disabled if LOG_NO_HEX_DUMP is defined
-void _hex_dump(TCHAR *desc, void *addr, int len)
+void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
 {
     int i;
     TCHAR buff[17];

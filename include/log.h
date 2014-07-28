@@ -27,19 +27,20 @@ enum
 } LOG_LEVEL;
 
 // Use the log directory and log level from registry config.
-DWORD LogInitDefault(WCHAR *logName);
+// If logName is NULL, use current executable as name.
+DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName);
 
-// Formats unique log file path and calls log_start.
-// If log_dir is NULL, use default log location (%SYSTEMDRIVE%\QubesLogs).
-void LogInit(TCHAR *log_dir, TCHAR *base_name);
+// Formats unique log file path and calls LogStart.
+// If logDir is NULL, use default log location (%SYSTEMDRIVE%\QubesLogs).
+void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *logName);
 
-// If logfile_path is NULL, use stderr.
-void LogStart(TCHAR *logfile_path);
+// If logfilePath is NULL, use stderr.
+void LogStart(const IN OPTIONAL TCHAR *logfilePath);
 
 // Set verbosity level.
 void LogSetVerbosity(int level);
 
-void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *format, ...);
+void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const IN TCHAR *format, ...);
 // *_raw functions omit the timestamp, function name prefix and don't append newlines automatically.
 
 // Microsoft compilers define __FUNCTION__ as a string literal.
@@ -69,12 +70,12 @@ void _logf(BOOL echo_to_stderr, BOOL raw, const char *function_name, TCHAR *form
 #define errorf_raw(format, ...) _logf(TRUE, TRUE, NULL, TEXT(format), ##__VA_ARGS__)
 
 // Returns last error code.
-DWORD _perror(const char *function_name, TCHAR *prefix);
+DWORD _perror(const IN char *functionName, const IN TCHAR *prefix);
 #define perror(prefix) _perror(__FUNCTION__, TEXT(prefix))
 
 // hex_dump only logs if DEBUG is defined.
 // You can define LOG_NO_HEX_DUMP to disable it even in DEBUG build (it can generate massive log files).
-void _hex_dump(TCHAR *desc, void *addr, int len);
+void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len);
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(LOG_NO_HEX_DUMP)
 #define hex_dump(desc, addr, len) _hex_dump(TEXT(desc), addr, len)
 #else
@@ -82,4 +83,4 @@ void _hex_dump(TCHAR *desc, void *addr, int len);
 #endif
 
 // Flush pending data to the log file.
-void log_flush();
+void LogFlush(void);
