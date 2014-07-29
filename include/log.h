@@ -6,10 +6,10 @@
 // Underscore functions are meant for internal use.
 
 // Log directory.
-#define LOG_CONFIG_PATH_VALUE L"LogDir"
+#define LOG_CONFIG_PATH_VALUE TEXT("LogDir")
 
 // Log level.
-#define LOG_CONFIG_LEVEL_VALUE L"LogLevel"
+#define LOG_CONFIG_LEVEL_VALUE TEXT("LogLevel")
 
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536

@@ -302,10 +302,10 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
     if (bufferUtf8[bufferSize - 1] != '\n')
         addNewline = TRUE;
 #else
-    if (buffer[buffer_size-1] != '\n')
-        add_newline = TRUE;
+    if (buffer[bufferSize - 1] != '\n')
+        addNewline = TRUE;
     if (!raw)
-        prefix_buffer_size = prefix_len;
+        prefixBufferSize = prefixLen;
 #endif
 
     if (g_LogfileHandle != INVALID_HANDLE_VALUE)
