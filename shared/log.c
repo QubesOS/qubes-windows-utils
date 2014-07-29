@@ -12,7 +12,7 @@
 static BOOL g_LoggerInitialized = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
 static TCHAR g_LogName[CFG_MODULE_MAX];
-static int g_LogLevel;
+static int g_LogLevel = LOG_LEVEL_INFO; // for startup
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
@@ -93,20 +93,22 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
     TCHAR buffer[MAX_PATH];
 
     StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), baseName);
+    GetLocalTime(&st);
 
     // if logDir is NULL, use default log location
     if (!logDir)
     {
         // Prepare default log path (%SYSTEMDRIVE%\QubesLogs)
-        GetLocalTime(&st);
 
         if (!GetSystemDirectory(systemPath, RTL_NUMBER_OF(systemPath)))
         {
+            LogStart(NULL);
             LogWarning("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             goto fallback;
         }
         if (FAILED(StringCchCopy(systemPath + 3, RTL_NUMBER_OF(systemPath) - 3, LOG_DEFAULT_DIR TEXT("\0"))))
         {
+            LogStart(NULL);
             LogWarning("StringCchCopy failed");
             goto fallback;
         }
@@ -114,6 +116,7 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
         {
             if (GetLastError() != ERROR_ALREADY_EXISTS)
             {
+                LogStart(NULL);
                 perror("CreateDirectory");
                 LogWarning("failed to create %s\n", systemPath);
                 goto fallback;
@@ -131,6 +134,7 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
         GetCurrentProcessId()
         )))
     {
+        LogStart(NULL);
         LogWarning("StringCchPrintf(full path) failed");
         goto fallback;
     }
@@ -266,7 +270,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     SYSTEMTIME st;
     TCHAR prefixBuffer[256];
     int prefixLen = 0;
-    TCHAR buffer[BUFFER_SIZE];
+    TCHAR *buffer = NULL;
     char *newline = "\n";
 #define NEWLINE_LEN 1
     BOOL addNewline = FALSE;
@@ -275,8 +279,11 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     char *prefixBufferUtf8 = NULL;
 #endif
     size_t prefixBufferSize = 0;
-    BOOL echoToStderr = level >= LOG_LEVEL_WARNING;
+    BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
+
+    bufferSize = sizeof(TCHAR) * BUFFER_SIZE;
+    buffer = (TCHAR*)malloc(bufferSize);
 
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
@@ -284,7 +291,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     if (level > g_LogLevel)
         return;
 
-#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d|%d|%c] ")
+#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #ifdef UNICODE
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
 #else
@@ -302,7 +309,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 
     va_start(args, format);
 
-    memset(buffer, 0, sizeof(buffer));
+    memset(buffer, 0, bufferSize);
     // format buffer
     bufferSize = _vstprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(TCHAR);
     va_end(args);
@@ -405,6 +412,7 @@ cleanup:
 #ifdef UNICODE
     if (!raw)
         free(prefixBufferUtf8);
+    free(buffer);
     free(bufferUtf8);
 #endif
 
