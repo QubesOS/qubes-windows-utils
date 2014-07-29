@@ -282,14 +282,13 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
 
-    bufferSize = sizeof(TCHAR) * BUFFER_SIZE;
-    buffer = (TCHAR*)malloc(bufferSize);
-
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
 
     if (level > g_LogLevel)
         return;
+
+    buffer = (TCHAR*)malloc(BUFFER_SIZE);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #ifdef UNICODE
@@ -409,10 +408,11 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 
 cleanup:
 
+    free(buffer);
+
 #ifdef UNICODE
     if (!raw)
         free(prefixBufferUtf8);
-    free(buffer);
     free(bufferUtf8);
 #endif
 
