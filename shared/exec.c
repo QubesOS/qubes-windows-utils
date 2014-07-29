@@ -379,7 +379,7 @@ ULONG GrantRemoteSessionDesktopAccess(DWORD dwSessionId, TCHAR *pszAccountName, 
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
 
-    logf("GrantRemoteSessionDesktopAccess(): CreateProcessAsUser(\"%S\")\n", szArguments);
+    LogDebug("GrantRemoteSessionDesktopAccess(): CreateProcessAsUser('%S')\n", szArguments);
 
     if (!CreateProcessAsUser(
             hToken,
@@ -439,7 +439,7 @@ ULONG CreatePipedProcessAsCurrentUser(
 
     *phProcess = INVALID_HANDLE_VALUE;
 
-    debugf("CreatePipedProcessAsCurrentUser: %s\n", pwszCommand);
+    LogDebug("CreatePipedProcessAsCurrentUser: %s\n", pwszCommand);
 
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
@@ -475,7 +475,7 @@ ULONG CreatePipedProcessAsCurrentUser(
         return uResult;
     }
 
-    logf("CreatePipedProcessAsCurrentUser(): pid %d\n", pi.dwProcessId);
+    LogDebug("CreatePipedProcessAsCurrentUser(): pid %d\n", pi.dwProcessId);
 
     *phProcess = pi.hProcess;
     CloseHandle(pi.hThread);
@@ -511,7 +511,7 @@ ULONG CreatePipedProcessAsUser(
         return ERROR_INVALID_PARAMETER;
 
     *phProcess = INVALID_HANDLE_VALUE;
-    debugf("CreatePipedProcessAsUser: %s, %s\n", pwszUserName, pwszCommand);
+    LogDebug("CreatePipedProcessAsUser: %s, %s\n", pwszUserName, pwszCommand);
 
     if (!ProcessIdToSessionId(GetCurrentProcessId(), &dwCurrentSessionId)) {
         uResult = GetLastError();
@@ -688,7 +688,7 @@ ULONG CreatePipedProcessAsUser(
 
     DestroyEnvironmentBlock(pEnvironment);
 
-    logf("CreatePipedProcessAsUser(): pid %d\n", pi.dwProcessId);
+    LogDebug("CreatePipedProcessAsUser(): pid %d\n", pi.dwProcessId);
 
     *phProcess = pi.hProcess;
     CloseHandle(pi.hThread);

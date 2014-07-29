@@ -11,8 +11,8 @@
 
 static BOOL g_LoggerInitialized = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
-static int g_LogLevel;
 static TCHAR g_LogName[CFG_MODULE_MAX];
+static int g_LogLevel;
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
@@ -21,6 +21,14 @@ static TCHAR g_LogName[CFG_MODULE_MAX];
 #if (UNLEN > LOG_MAX_MESSAGE_LENGTH)
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
+
+static TCHAR g_LogLevelChar[] = {
+    TEXT('E'),
+    TEXT('W'),
+    TEXT('I'),
+    TEXT('D'),
+    TEXT('V')
+};
 
 static void PurgeOldLogs(const IN TCHAR *logDir)
 {
@@ -53,13 +61,27 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
     FindClose(findHandle);
 }
 
-void LogGetLevel(void)
+// Read verbosity level from registry config.
+void LogReadLevel(void)
 {
     DWORD status; 
     status = CfgReadDword(g_LogName, LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
 
     if (status != ERROR_SUCCESS)
-        g_LogLevel = LOG_LEVEL_ERROR; // default
+        g_LogLevel = LOG_LEVEL_INFO; // default
+    LogInfo("Verbosity level set to %d", g_LogLevel);
+}
+
+// Explicitly set verbosity level.
+void LogSetLevel(IN int level)
+{
+    g_LogLevel = level;
+    LogInfo("Verbosity level set to %d", g_LogLevel);
+}
+
+int LogGetLevel(void)
+{
+    return g_LogLevel;
 }
 
 void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
@@ -80,12 +102,12 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
 
         if (!GetSystemDirectory(systemPath, RTL_NUMBER_OF(systemPath)))
         {
-            perror("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
+            LogWarning("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             goto fallback;
         }
-        if (FAILED(StringCchCopy(systemPath + 3, RTL_NUMBER_OF(systemPath) - 3, TEXT("QubesLogs\0"))))
+        if (FAILED(StringCchCopy(systemPath + 3, RTL_NUMBER_OF(systemPath) - 3, LOG_DEFAULT_DIR TEXT("\0"))))
         {
-            errorf("StringCchCopy failed");
+            LogWarning("StringCchCopy failed");
             goto fallback;
         }
         if (!CreateDirectory(systemPath, NULL))
@@ -93,7 +115,7 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
             if (GetLastError() != ERROR_ALREADY_EXISTS)
             {
                 perror("CreateDirectory");
-                errorf("failed to create %s\n", systemPath);
+                LogWarning("failed to create %s\n", systemPath);
                 goto fallback;
             }
         }
@@ -109,14 +131,14 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
         GetCurrentProcessId()
         )))
     {
-        errorf("StringCchPrintf(full path) failed");
+        LogWarning("StringCchPrintf(full path) failed");
         goto fallback;
     }
 
     LogStart(buffer);
 
 fallback:
-    logf("\nLog started: %s\n", buffer);
+    LogInfo("Log started, module name: %s\n", g_LogName);
     memset(buffer, 0, sizeof(buffer));
 
     // if we pass too large buffer it returns ERROR_BUFFER_TOO_SMALL... go figure
@@ -124,11 +146,11 @@ fallback:
     if (!GetUserName(buffer, &len))
     {
         perror("GetUserName");
-        logf("Running as user: <UNKNOWN>, process ID: %d\n", GetCurrentProcessId());
+        LogInfo("Running as user: <UNKNOWN>, process ID: %d\n", GetCurrentProcessId());
     }
     else
     {
-        logf("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
+        LogInfo("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
     }
 }
 
@@ -147,7 +169,7 @@ DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName)
         {
             // log to stderr only
             LogStart(NULL);
-            LogGetLevel();
+            LogReadLevel();
             return status;
         }
 
@@ -168,7 +190,7 @@ DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName)
         LogInit(logPath, logName);
     }
 
-    LogGetLevel();
+    LogReadLevel();
 
     return status;
 }
@@ -196,8 +218,7 @@ void LogStart(const IN OPTIONAL TCHAR *logfilePath)
             if (g_LogfileHandle == INVALID_HANDLE_VALUE)
             {
                 status = GetLastError();
-                _ftprintf(stderr, TEXT("log_start: CreateFile(%s) failed: error %d\n"),
-                    logfilePath, GetLastError());
+                _ftprintf(stderr, TEXT("LogStart: CreateFile(%s) failed: error %d\n"), logfilePath, GetLastError());
                 goto fallback;
             }
 
@@ -206,8 +227,7 @@ void LogStart(const IN OPTIONAL TCHAR *logfilePath)
             if (INVALID_SET_FILE_POINTER == len)
             {
                 status = GetLastError();
-                _ftprintf(stderr, TEXT("log_start: SetFilePointer(%s) failed: error %d\n"),
-                    logfilePath, GetLastError());
+                _ftprintf(stderr, TEXT("LogStart: SetFilePointer(%s) failed: error %d\n"), logfilePath, GetLastError());
                 goto fallback;
             }
 
@@ -216,8 +236,7 @@ void LogStart(const IN OPTIONAL TCHAR *logfilePath)
                 if (!WriteFile(g_LogfileHandle, utf8Bom, 3, &len, NULL))
                 {
                     status = GetLastError();
-                    _ftprintf(stderr, TEXT("log_start: WriteFile(%s) failed: error %d\n"),
-                        logfilePath, GetLastError());
+                    _ftprintf(stderr, TEXT("LogStart: WriteFile(%s) failed: error %d\n"), logfilePath, GetLastError());
                     goto fallback;
                 }
             }
@@ -239,7 +258,7 @@ void LogFlush(void)
         FlushFileBuffers(g_LogfileHandle);
 }
 
-void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const IN TCHAR *format, ...)
+void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN TCHAR *format, ...)
 {
     va_list args;
     size_t bufferSize = 0;
@@ -256,12 +275,16 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
     char *prefixBufferUtf8 = NULL;
 #endif
     size_t prefixBufferSize = 0;
+    BOOL echoToStderr = level >= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
 
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
 
-#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d][%d] ")
+    if (level > g_LogLevel)
+        return;
+
+#define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d|%d|%c] ")
 #ifdef UNICODE
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
 #else
@@ -274,7 +297,7 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
         prefixLen = _stprintf_s(prefixBuffer, RTL_NUMBER_OF(prefixBuffer),
             functionName ? PREFIX_FORMAT PREFIX_FORMAT_FUNCNAME : PREFIX_FORMAT,
             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
-            GetCurrentThreadId(), functionName);
+            GetCurrentThreadId(), g_LogLevelChar[level], functionName);
     }
 
     va_start(args, format);
@@ -289,14 +312,14 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
     {
         if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, &prefixBufferUtf8, &prefixBufferSize))
         {
-            _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
+            _ftprintf(stderr, TEXT("_LogFormat: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
             goto cleanup;
         }
     }
 
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &bufferUtf8, &bufferSize))
     {
-        _ftprintf(stderr, TEXT("_logf: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
+        _ftprintf(stderr, TEXT("_LogFormat: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
         goto cleanup;
 }
     if (bufferUtf8[bufferSize - 1] != '\n')
@@ -318,7 +341,7 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
             if (!WriteFile(g_LogfileHandle, prefixBuffer, (DWORD)prefixBufferSize, &written, NULL) || written != (DWORD)prefixBufferSize)
 #endif
             {
-                _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+                _ftprintf(stderr, TEXT("_LogFormat: WriteFile failed: error %d\n"), GetLastError());
                 goto cleanup;
             }
         }
@@ -330,7 +353,7 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
         if (!WriteFile(g_LogfileHandle, buffer, (DWORD)bufferSize, &written, NULL) || written != (DWORD)bufferSize)
 #endif
         {
-            _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+            _ftprintf(stderr, TEXT("_LogFormat: WriteFile failed: error %d\n"), GetLastError());
             goto cleanup;
         }
 
@@ -338,7 +361,7 @@ void _logf(IN BOOL echoToStderr, IN BOOL raw, const IN char *functionName, const
         {
             if (!WriteFile(g_LogfileHandle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
             {
-                _ftprintf(stderr, TEXT("_logf: WriteFile failed: error %d\n"), GetLastError());
+                _ftprintf(stderr, TEXT("_LogFormat: WriteFile failed: error %d\n"), GetLastError());
                 goto cleanup;
             }
         }
@@ -433,7 +456,7 @@ DWORD _perror(const IN char *functionName, const IN TCHAR *prefix)
             goto cleanup;
     }
 
-    _logf(TRUE, FALSE, functionName, TEXT("%s%s"), prefix, buffer);
+    _LogFormat(LOG_LEVEL_ERROR, FALSE, functionName, TEXT("%s%s"), prefix, buffer);
 cleanup:
     SetLastError(errorCode); // preserve
     return errorCode;
@@ -451,7 +474,7 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
 
     // Output description if given.
     if (desc != NULL)
-        debugf_raw("%s:\n", desc);
+        LogDebugRaw("%s:\n", desc);
 
     // Process every byte in the data.
     for (i = 0; i < len; i++) {
@@ -460,17 +483,17 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
         if ((i % 16) == 0) {
             // Just don't print ASCII for the zeroth line.
             if (i != 0)
-                debugf_raw("  %s\n", buff);
+                LogDebugRaw("  %s\n", buff);
 
             // Output the offset.
-            debugf_raw("%04x:", i);
+            LogDebugRaw("%04x:", i);
         }
 
         // Now the hex code for the specific character.
         if (i % 8 == 0 && i % 16 != 0)
-            debugf_raw("  %02x", pc[i]);
+            LogDebugRaw("  %02x", pc[i]);
         else
-            debugf_raw(" %02x", pc[i]);
+            LogDebugRaw(" %02x", pc[i]);
 
         // And store a printable ASCII character for later.
         if ((pc[i] < 0x20) || (pc[i] > 0x7e))
@@ -482,12 +505,12 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
 
     // Pad out last line if not exactly 16 characters.
     if (i % 16 <= 8 && i % 16 != 0)
-        debugf_raw(" ");
+        LogDebugRaw(" ");
     while ((i % 16) != 0) {
-        debugf_raw("   ");
+        LogDebugRaw("   ");
         i++;
     }
 
     // And print the final ASCII bit.
-    debugf_raw("  %s\n", buff);
+    LogDebugRaw("  %s\n", buff);
 }
