@@ -1,13 +1,14 @@
 #include <Windows.h>
 #include <Shlwapi.h>
+#include <tchar.h>
 #include <strsafe.h>
 
 #include "config.h"
 
 // Get current executable's module name (base file name without extension).
-DWORD CfgGetModuleName(OUT PWCHAR moduleName, IN DWORD moduleNameLength)
+DWORD CfgGetModuleName(OUT TCHAR *moduleName, IN DWORD moduleNameLength)
 {
-    WCHAR exePath[MAX_PATH], *exeName;
+    TCHAR exePath[MAX_PATH], *exeName;
     DWORD status = ERROR_SUCCESS;
 
     if (!GetModuleFileName(NULL, exePath, RTL_NUMBER_OF(exePath)))
@@ -33,10 +34,10 @@ cleanup:
     return status;
 }
 
-DWORD CfgOpenKey(const IN OPTIONAL PWCHAR moduleName, OUT PHKEY key, OUT OPTIONAL PBOOL rootFallback)
+DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, OUT OPTIONAL BOOL *rootFallback)
 {
     DWORD status;
-    WCHAR keyPath[CFG_PATH_MAX];
+    TCHAR keyPath[CFG_PATH_MAX];
 
     if (moduleName)
     {
@@ -44,7 +45,7 @@ DWORD CfgOpenKey(const IN OPTIONAL PWCHAR moduleName, OUT PHKEY key, OUT OPTIONA
             *rootFallback = FALSE;
 
         // Try to open module-specific key.
-        StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), L"%s\\%s", REG_CONFIG_KEY, moduleName);
+        StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), TEXT("%s\\%s"), REG_CONFIG_KEY, moduleName);
 
         SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ, key));
         if (status == ERROR_SUCCESS)
@@ -60,7 +61,7 @@ DWORD CfgOpenKey(const IN OPTIONAL PWCHAR moduleName, OUT PHKEY key, OUT OPTIONA
 }
 
 // Read a string value from registry config.
-DWORD CfgReadString(const IN OPTIONAL PWCHAR moduleName, const IN PWCHAR valueName, OUT PWCHAR value, IN DWORD valueLength, OUT OPTIONAL PBOOL rootFallback)
+DWORD CfgReadString(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueName, OUT TCHAR *value, IN DWORD valueLength, OUT OPTIONAL BOOL *rootFallback)
 {
     HKEY key = NULL;
     DWORD status;
@@ -71,8 +72,8 @@ DWORD CfgReadString(const IN OPTIONAL PWCHAR moduleName, const IN PWCHAR valueNa
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
-    size = sizeof(WCHAR) * (valueLength - 1);
-    ZeroMemory(value, sizeof(WCHAR)*valueLength);
+    size = sizeof(TCHAR) * (valueLength - 1);
+    ZeroMemory(value, sizeof(TCHAR)*valueLength);
 
     SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE)value, &size));
     if (status != ERROR_SUCCESS)
@@ -92,7 +93,7 @@ cleanup:
 }
 
 // Read a DWORD value from registry config.
-DWORD CfgReadDword(const IN OPTIONAL PWCHAR moduleName, const IN PWCHAR valueName, OUT PDWORD value, OUT OPTIONAL PBOOL rootFallback)
+DWORD CfgReadDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueName, OUT DWORD *value, OUT OPTIONAL BOOL *rootFallback)
 {
     HKEY key = NULL;
     DWORD status;
@@ -123,7 +124,7 @@ cleanup:
 }
 
 // Read a 64-bit value from registry config.
-DWORD CfgReadQword(const IN OPTIONAL PWCHAR moduleName, const IN PWCHAR valueName, OUT PLARGE_INTEGER value, OUT OPTIONAL PBOOL rootFallback)
+DWORD CfgReadQword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueName, OUT LARGE_INTEGER *value, OUT OPTIONAL BOOL *rootFallback)
 {
     HKEY key = NULL;
     DWORD status;
@@ -155,16 +156,16 @@ cleanup:
 
 // Creates the registry config key if not present.
 // NOTE: this will fail for non-administrators if the key doesn't exist.
-DWORD CfgEnsureKeyExists(const IN OPTIONAL PWCHAR moduleName)
+DWORD CfgEnsureKeyExists(const IN OPTIONAL TCHAR *moduleName)
 {
     HKEY key = NULL;
     DWORD status;
-    WCHAR keyPath[CFG_PATH_MAX];
+    TCHAR keyPath[CFG_PATH_MAX];
 
     if (moduleName)
     {
         // Try to open module-specific key.
-        StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), L"%s\\%s", REG_CONFIG_KEY, moduleName);
+        StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), TEXT("%s\\%s"), REG_CONFIG_KEY, moduleName);
     }
     else
     {
