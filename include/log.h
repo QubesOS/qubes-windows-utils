@@ -74,6 +74,8 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 DWORD _perror(const IN char *functionName, const IN TCHAR *prefix);
 #define perror(prefix) _perror(__FUNCTION__, TEXT(prefix))
 
+#define perror2(error, prefix) _perror2(__FUNCTION__, error, TEXT(prefix))
+
 // hex_dump only logs if DEBUG is defined.
 // You can define LOG_NO_HEX_DUMP to disable it even in DEBUG build (it can generate massive log files).
 void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len);

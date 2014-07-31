@@ -423,6 +423,13 @@ cleanup:
     SetLastError(lastError);
 }
 
+// Like _perror, but takes explicit error code. For cases when previous call doesn't set LastError.
+DWORD _perror2(const IN char *functionName, IN DWORD errorCode, const IN TCHAR *prefix)
+{
+    SetLastError(errorCode);
+    return _perror(functionName, prefix);
+}
+
 // Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno.
 DWORD _perror(const IN char *functionName, const IN TCHAR *prefix)
 {
