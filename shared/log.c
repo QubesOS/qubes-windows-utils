@@ -282,11 +282,11 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
 
-    if (!g_LoggerInitialized)
-        LogInitDefault(NULL);
-
     if (level > g_LogLevel)
         return;
+
+    if (!g_LoggerInitialized)
+        LogInitDefault(NULL);
 
     buffer = (TCHAR*)malloc(BUFFER_SIZE);
 
