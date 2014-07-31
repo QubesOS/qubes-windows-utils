@@ -1,6 +1,9 @@
 #pragma once
 #include <windows.h>
 
+// To override CRT's perror definition.
+#define _CRT_PERROR_DEFINED
+
 // If LOG_SAFE_FLUSH is defined, the log file is flushed after every log call. (TODO: registry config)
 
 // Underscore functions are meant for internal use.
@@ -74,6 +77,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 DWORD _perror(const IN char *functionName, const IN TCHAR *prefix);
 #define perror(prefix) _perror(__FUNCTION__, TEXT(prefix))
 
+DWORD _perror2(const IN char *functionName, IN DWORD errorCode, const IN TCHAR *prefix);
 #define perror2(error, prefix) _perror2(__FUNCTION__, error, TEXT(prefix))
 
 // hex_dump only logs if DEBUG is defined.
