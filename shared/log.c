@@ -11,8 +11,8 @@
 
 static BOOL g_LoggerInitialized = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
-static TCHAR g_LogName[CFG_MODULE_MAX];
-static int g_LogLevel = LOG_LEVEL_INFO; // for startup
+static TCHAR g_LogName[CFG_MODULE_MAX] = { 0 };
+static int g_LogLevel = -1; // uninitialized
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
@@ -61,15 +61,28 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
     FindClose(findHandle);
 }
 
+static TCHAR *LogGetName(void)
+{
+    DWORD status;
+
+    if (g_LogName[0] == 0)
+    {
+        status = CfgGetModuleName(g_LogName, RTL_NUMBER_OF(g_LogName));
+        if (ERROR_SUCCESS != status)
+            return NULL;
+    }
+    return g_LogName;
+}
+
 // Read verbosity level from registry config.
-void LogReadLevel(void)
+// This should not call LogXXX to avoid infinite loop.
+static void LogReadLevel(void)
 {
     DWORD status; 
-    status = CfgReadDword(g_LogName, LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
+    status = CfgReadDword(LogGetName(), LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
 
     if (status != ERROR_SUCCESS)
         g_LogLevel = LOG_LEVEL_INFO; // default
-    LogInfo("Verbosity level set to %d", g_LogLevel);
 }
 
 // Explicitly set verbosity level.
@@ -89,7 +102,7 @@ int LogGetLevel(void)
     return g_LogLevel;
 }
 
-void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
+void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *logName)
 {
     SYSTEMTIME st;
     DWORD len = 0;
@@ -97,7 +110,10 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
     TCHAR systemPath[MAX_PATH];
     TCHAR buffer[MAX_PATH];
 
-    StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), baseName);
+    if (g_LogLevel < 0)
+        g_LogLevel = LOG_LEVEL_INFO; // default
+
+    StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), logName);
     GetLocalTime(&st);
 
     // if logDir is NULL, use default log location
@@ -135,7 +151,7 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *baseName)
     memset(buffer, 0, sizeof(buffer));
     if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer),
         format,
-        logDir, baseName, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
+        logDir, g_LogName, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
         GetCurrentProcessId()
         )))
     {
@@ -169,37 +185,37 @@ DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName)
 {
     DWORD status;
     TCHAR logPath[MAX_PATH];
-    TCHAR moduleName[MAX_PATH];
 
     if (!logName)
     {
-        status = CfgGetModuleName(moduleName, RTL_NUMBER_OF(moduleName));
-        if (ERROR_SUCCESS != status)
+        logName = LogGetName();
+        if (logName == NULL)
         {
             // log to stderr only
             LogStart(NULL);
-            LogReadLevel();
-            return status;
+            g_LogLevel = LOG_LEVEL_DEFAULT;
+            LogInfo("Verbosity level set to %d", g_LogLevel);
+            return ERROR_INVALID_NAME;
         }
-
-        logName = moduleName;
     }
+    else
+        StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), logName);
+
+    LogReadLevel(); // needs log name
 
     status = CfgReadString(logName, LOG_CONFIG_PATH_VALUE, logPath, RTL_NUMBER_OF(logPath), NULL);
     if (ERROR_SUCCESS != status)
     {
         // failed, use default location
-        // todo: use event log
         LogInit(NULL, logName);
         SetLastError(status);
-        perror("CfgReadString(log path)");
     }
     else
     {
         LogInit(logPath, logName);
     }
 
-    LogReadLevel();
+    LogInfo("Verbosity level set to %d", g_LogLevel);
 
     return status;
 }
@@ -286,6 +302,11 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     size_t prefixBufferSize = 0;
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
+
+    // If we're initializing ad-hoc on a first log call, first read the log level
+    // so we can tell if the log file should be created now.
+    if (g_LogLevel < 0)
+        LogReadLevel();
 
     if (level > g_LogLevel)
         return;
