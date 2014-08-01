@@ -75,8 +75,13 @@ void LogReadLevel(void)
 // Explicitly set verbosity level.
 void LogSetLevel(IN int level)
 {
+    if (level < LOG_LEVEL_MIN || level > LOG_LEVEL_MAX)
+    {
+        LogWarning("Ignoring invalid log level %d", level);
+        return;
+    }
     g_LogLevel = level;
-    LogInfo("Verbosity level set to %d", g_LogLevel);
+    LogInfo("Verbosity level set to %d (%c)", g_LogLevel, g_LogLevelChar[g_LogLevel]);
 }
 
 int LogGetLevel(void)

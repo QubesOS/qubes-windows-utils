@@ -33,6 +33,9 @@ enum
     LOG_LEVEL_VERBOSE = 4   // extremely detailed information: entry/exit of all functions etc.
 } LOG_LEVEL;
 
+#define LOG_LEVEL_MIN LOG_LEVEL_ERROR
+#define LOG_LEVEL_MAX LOG_LEVEL_VERBOSE
+
 // Use the log directory and log level from registry config.
 // If logName is NULL, use current executable as name.
 DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName);
