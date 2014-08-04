@@ -14,11 +14,14 @@
 // Registry config value: Log level.
 #define LOG_CONFIG_LEVEL_VALUE TEXT("LogLevel")
 
+// Registry config value: Log retention time (seconds).
+#define LOG_CONFIG_RETENTION_VALUE TEXT("LogRetention")
+
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
 
-// Logs older than this (seconds) will be deleted.
-#define LOG_RETENTION_TIME (7*24*60*60ULL)
+// Logs older than this (seconds) will be deleted (default value - 7 days).
+#define LOG_DEFAULT_RETENTION_TIME (7*24*60*60ULL)
 
 // Default log directory (prepend "%SYSTEMDRIVE%\")
 #define LOG_DEFAULT_DIR TEXT("QubesLogs")

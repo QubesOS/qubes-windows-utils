@@ -16,8 +16,6 @@ static int g_LogLevel = -1; // uninitialized
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
 
-#define LOG_RETENTION_TIME_100NS (LOG_RETENTION_TIME * 10000000ULL)
-
 #if (UNLEN > LOG_MAX_MESSAGE_LENGTH)
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
@@ -38,9 +36,14 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
     HANDLE findHandle;
     TCHAR searchMask[MAX_PATH];
     TCHAR filePath[MAX_PATH];
+    LARGE_INTEGER logRetentionTime;
+
+    // Read log retention time from registry.
+    if (FAILED(CfgReadQword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime, NULL)))
+        logRetentionTime.QuadPart = LOG_DEFAULT_RETENTION_TIME * 10000000ULL; // in 100ns units
 
     GetSystemTimeAsFileTime(&ft);
-    (*thresholdTime).QuadPart -= LOG_RETENTION_TIME_100NS;
+    (*thresholdTime).QuadPart -= logRetentionTime.QuadPart;
 
     StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), TEXT("%s\\%s*.*"), logDir, g_LogName);
 
