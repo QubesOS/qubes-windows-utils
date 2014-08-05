@@ -34,7 +34,7 @@ cleanup:
     return status;
 }
 
-DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, OUT OPTIONAL BOOL *rootFallback)
+DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, const IN TCHAR *valueName, OUT OPTIONAL BOOL *rootFallback)
 {
     DWORD status;
     TCHAR keyPath[CFG_PATH_MAX];
@@ -49,7 +49,13 @@ DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, OUT OPTIONA
 
         SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ, key));
         if (status == ERROR_SUCCESS)
-            return status;
+        {
+            // Check if the requested value exists.
+            SetLastError(status = RegQueryValueEx(*key, valueName, NULL, NULL, NULL, NULL));
+            if (status == ERROR_SUCCESS)
+                return status;
+            RegCloseKey(*key); // value not found, try the root key
+        }
     }
 
     if (rootFallback)
@@ -68,7 +74,7 @@ DWORD CfgReadString(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNa
     DWORD type;
     DWORD size;
 
-    status = CfgOpenKey(moduleName, &key, rootFallback);
+    status = CfgOpenKey(moduleName, &key, valueName, rootFallback);
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
@@ -100,7 +106,7 @@ DWORD CfgReadDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNam
     DWORD type;
     DWORD size;
 
-    status = CfgOpenKey(moduleName, &key, rootFallback);
+    status = CfgOpenKey(moduleName, &key, valueName, rootFallback);
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
@@ -131,7 +137,7 @@ DWORD CfgReadQword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNam
     DWORD type;
     DWORD size;
 
-    status = CfgOpenKey(moduleName, &key, rootFallback);
+    status = CfgOpenKey(moduleName, &key, valueName, rootFallback);
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
