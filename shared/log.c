@@ -37,11 +37,13 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
     HANDLE findHandle;
     TCHAR searchMask[MAX_PATH];
     TCHAR filePath[MAX_PATH];
-    LARGE_INTEGER logRetentionTime;
+    LARGE_INTEGER logRetentionTime = { 0 };
 
-    // Read log retention time from registry.
-    if (ERROR_SUCCESS != CfgReadQword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime, NULL))
-        logRetentionTime.QuadPart = LOG_DEFAULT_RETENTION_TIME * 10000000ULL; // in 100ns units
+    // Read log retention time from registry (in seconds).
+    if (ERROR_SUCCESS != CfgReadDword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime.LowPart, NULL))
+        logRetentionTime.QuadPart = LOG_DEFAULT_RETENTION_TIME;
+
+    logRetentionTime.QuadPart *= 10000000ULL; // convert to 100ns units
 
     GetSystemTimeAsFileTime(&ft);
     (*thresholdTime).QuadPart -= logRetentionTime.QuadPart;
