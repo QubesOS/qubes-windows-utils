@@ -40,7 +40,7 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
     LARGE_INTEGER logRetentionTime;
 
     // Read log retention time from registry.
-    if (FAILED(CfgReadQword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime, NULL)))
+    if (ERROR_SUCCESS != CfgReadQword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime, NULL))
         logRetentionTime.QuadPart = LOG_DEFAULT_RETENTION_TIME * 10000000ULL; // in 100ns units
 
     GetSystemTimeAsFileTime(&ft);
