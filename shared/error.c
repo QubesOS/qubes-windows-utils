@@ -22,6 +22,13 @@ static LONG WINAPI ErrUEF(LPEXCEPTION_POINTERS ep)
 
 DWORD ErrRegisterUEF(void)
 {
+    static BOOL registered = FALSE;
+
+    if (registered)
+        return ERROR_SUCCESS;
+
+    registered = TRUE;
     SetUnhandledExceptionFilter(ErrUEF);
+    LogDebug("done");
     return ERROR_SUCCESS;
 }

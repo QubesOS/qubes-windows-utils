@@ -8,6 +8,7 @@
 #include "utf8-conv.h"
 #include "log.h"
 #include "config.h"
+#include "error.h"
 
 static BOOL g_LoggerInitialized = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
@@ -305,6 +306,8 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     size_t prefixBufferSize = 0;
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
+
+    ErrRegisterUEF();
 
     // If we're initializing ad-hoc on a first log call, first read the log level
     // so we can tell if the log file should be created now.
