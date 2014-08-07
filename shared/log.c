@@ -139,19 +139,19 @@ void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *logName)
             LogWarning("StringCchCopy failed");
             goto fallback;
         }
-        if (!CreateDirectory(systemPath, NULL))
-        {
-            if (GetLastError() != ERROR_ALREADY_EXISTS)
-            {
-                LogStart(NULL);
-                perror("CreateDirectory");
-                LogWarning("failed to create %s\n", systemPath);
-                goto fallback;
-            }
-        }
         logDir = systemPath;
     }
 
+    if (!CreateDirectory(logDir, NULL))
+    {
+        if (GetLastError() != ERROR_ALREADY_EXISTS)
+        {
+            LogStart(NULL);
+            perror("CreateDirectory");
+            LogWarning("failed to create %s\n", logDir);
+            goto fallback;
+        }
+    }
     PurgeOldLogs(logDir);
 
     memset(buffer, 0, sizeof(buffer));
