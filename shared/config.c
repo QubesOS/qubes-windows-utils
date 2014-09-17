@@ -47,7 +47,7 @@ DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, const IN TC
         // Try to open module-specific key.
         StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), TEXT("%s\\%s"), REG_CONFIG_KEY, moduleName);
 
-        SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ, key));
+        SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ|KEY_WRITE, key));
         if (status == ERROR_SUCCESS)
         {
             // Check if the requested value exists.
@@ -62,7 +62,7 @@ DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, const IN TC
         *rootFallback = TRUE;
 
     // Open root key.
-    SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ, key));
+    SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ|KEY_WRITE, key));
     return status;
 }
 
@@ -121,6 +121,27 @@ DWORD CfgReadDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNam
         status = ERROR_DATATYPE_MISMATCH;
         goto cleanup;
     }
+
+cleanup:
+    if (key)
+        RegCloseKey(key);
+
+    return status;
+}
+
+// Write a DWORD value to registry config.
+DWORD CfgWriteDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueName, IN DWORD value, OUT OPTIONAL BOOL *rootFallback)
+{
+    HKEY key = NULL;
+    DWORD status;
+
+    status = CfgOpenKey(moduleName, &key, valueName, rootFallback);
+    if (status != ERROR_SUCCESS)
+        goto cleanup;
+
+    SetLastError(status = RegSetValueExW(key, valueName, 0, REG_DWORD, (PBYTE)&value, sizeof(DWORD)));
+    if (status != ERROR_SUCCESS)
+        goto cleanup;
 
 cleanup:
     if (key)

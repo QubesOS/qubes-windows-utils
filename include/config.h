@@ -23,6 +23,9 @@ DWORD CfgReadDword(const IN TCHAR *moduleName, const IN TCHAR *valueName, OUT DW
 // Read a 64-bit value from registry config.
 DWORD CfgReadQword(const IN TCHAR *moduleName, const IN TCHAR *valueName, OUT LARGE_INTEGER *value, OUT OPTIONAL BOOL *rootFallback);
 
+// Write a DWORD value to registry config.
+DWORD CfgWriteDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueName, IN DWORD value, OUT OPTIONAL BOOL *rootFallback);
+
 // Creates the registry config key if not present.
 // NOTE: this will fail for non-administrators if the key doesn't exist.
 DWORD CfgEnsureKeyExists(const IN OPTIONAL TCHAR *moduleName);
