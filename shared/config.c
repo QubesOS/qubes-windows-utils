@@ -47,7 +47,7 @@ DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, const IN TC
         // Try to open module-specific key.
         StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), TEXT("%s\\%s"), REG_CONFIG_KEY, moduleName);
 
-        SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ|KEY_WRITE, key));
+        SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ | KEY_WRITE, key));
         if (status == ERROR_SUCCESS)
         {
             // Check if the requested value exists.
@@ -62,7 +62,7 @@ DWORD CfgOpenKey(const IN OPTIONAL TCHAR *moduleName, OUT HKEY *key, const IN TC
         *rootFallback = TRUE;
 
     // Open root key.
-    SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ|KEY_WRITE, key));
+    SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ | KEY_WRITE, key));
     return status;
 }
 
@@ -81,7 +81,7 @@ DWORD CfgReadString(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNa
     size = sizeof(TCHAR) * (valueLength - 1);
     ZeroMemory(value, sizeof(TCHAR)*valueLength);
 
-    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE)value, &size));
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE) value, &size));
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
@@ -112,7 +112,7 @@ DWORD CfgReadDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNam
 
     size = sizeof(DWORD);
 
-    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE)value, &size));
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE) value, &size));
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
@@ -139,7 +139,7 @@ DWORD CfgWriteDword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNa
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
-    SetLastError(status = RegSetValueExW(key, valueName, 0, REG_DWORD, (PBYTE)&value, sizeof(DWORD)));
+    SetLastError(status = RegSetValueExW(key, valueName, 0, REG_DWORD, (PBYTE) &value, sizeof(DWORD)));
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
@@ -164,7 +164,7 @@ DWORD CfgReadQword(const IN OPTIONAL TCHAR *moduleName, const IN TCHAR *valueNam
 
     size = sizeof(LARGE_INTEGER);
 
-    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE)value, &size));
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (PBYTE) value, &size));
     if (status != ERROR_SUCCESS)
         goto cleanup;
 

@@ -48,7 +48,7 @@ int buffer_destroy(buffer_t *buffer)
 
     free(buffer->start);
     free(buffer);
-    
+
     return 0;
 }
 
@@ -94,27 +94,27 @@ int buffer_add_data(buffer_t *buffer, void *pdata, size_t data_size)
         return -1;
     }
 
-    if (buffer->data_start > buffer->start && buffer->data_end < buffer->start+buffer->size) // [.oo..]
+    if (buffer->data_start > buffer->start && buffer->data_end < buffer->start + buffer->size) // [.oo..]
     {
         free_at_end = (buffer->start + buffer->size - buffer->data_end);
         if (data_size <= free_at_end)
             memcpy(buffer->data_end, data, data_size);
         else
         {
-            memcpy(buffer->data_end, data, data_size-free_at_end);
-            memcpy(buffer->start, (data+data_size-free_at_end), free_at_end);
+            memcpy(buffer->data_end, data, data_size - free_at_end);
+            memcpy(buffer->start, (data + data_size - free_at_end), free_at_end);
         }
     }
     else
     {
-        if (buffer->data_end == buffer->start+buffer->size) // end at the limit, wrap to 0
+        if (buffer->data_end == buffer->start + buffer->size) // end at the limit, wrap to 0
             buffer->data_end = buffer->start;
         // now we have one consecutive block of free memory so just copy
         memcpy(buffer->data_end, data, data_size);
     }
 
     buffer->data_end += data_size;
-    if (buffer->data_end > buffer->start+buffer->size) // wrap only if end > limit, if end==limit pointer stays at the end
+    if (buffer->data_end > buffer->start + buffer->size) // wrap only if end > limit, if end==limit pointer stays at the end
         buffer->data_end -= buffer->size;
 
     if (free_size - data_size == 0) // buffer full
@@ -135,7 +135,7 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
     if (buffer->data_start == 0)  // buffer empty
     {
         *data_size = 0;
-        if ((underflow_mode==BUFFER_ALLOW_UNDERFLOW) || (*data_size == 0))
+        if ((underflow_mode == BUFFER_ALLOW_UNDERFLOW) || (*data_size == 0))
             return 0;
         else
         {
@@ -158,7 +158,7 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
     {
         if (*data_size > used_size) // underflow
         {
-            if (underflow_mode==BUFFER_ALLOW_UNDERFLOW)
+            if (underflow_mode == BUFFER_ALLOW_UNDERFLOW)
                 *data_size = used_size;
             else
             {
@@ -177,7 +177,7 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
         else
         {
             memcpy(data, buffer->data_start, used_at_end);
-            memcpy((data+used_at_end), buffer->start, *data_size-used_at_end);
+            memcpy((data + used_at_end), buffer->start, *data_size - used_at_end);
         }
     }
     else
@@ -187,7 +187,7 @@ int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UND
     }
 
     buffer->data_start += *data_size;
-    if (buffer->data_start >= buffer->start+buffer->size)
+    if (buffer->data_start >= buffer->start + buffer->size)
         buffer->data_start -= buffer->size;
 
     if (used_size - *data_size == 0) // buffer empty

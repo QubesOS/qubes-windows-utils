@@ -21,40 +21,39 @@ STANDARD_RIGHTS_REQUIRED)
 #define GENERIC_ACCESS (GENERIC_READ | GENERIC_WRITE | \
 GENERIC_EXECUTE | GENERIC_ALL)
 
-
 ULONG CreatePipedProcessAsUser(
-		TCHAR *pwszUserName,
-		TCHAR *pwszUserPassword,
-		TCHAR *pwszCommand,
-		BOOL bRunInteractively,
-		HANDLE hPipeStdin,
-		HANDLE hPipeStdout,
-		HANDLE hPipeStderr,
-		HANDLE *phProcess
-);
+    TCHAR *pwszUserName,
+    TCHAR *pwszUserPassword,
+    TCHAR *pwszCommand,
+    BOOL bRunInteractively,
+    HANDLE hPipeStdin,
+    HANDLE hPipeStdout,
+    HANDLE hPipeStderr,
+    HANDLE *phProcess
+    );
 
 ULONG CreateNormalProcessAsUser(
-		TCHAR *pwszUserName,
-		TCHAR *pwszUserPassword,
-		TCHAR *pwszCommand,
-		BOOL bRunInteractively,
-		HANDLE *phProcess
-);
+    TCHAR *pwszUserName,
+    TCHAR *pwszUserPassword,
+    TCHAR *pwszCommand,
+    BOOL bRunInteractively,
+    HANDLE *phProcess
+    );
 
 ULONG CreatePipedProcessAsCurrentUser(
-		TCHAR *pwszCommand,
-		HANDLE hPipeStdin,
-		HANDLE hPipeStdout,
-		HANDLE hPipeStderr,
-		HANDLE *phProcess
-);
+    TCHAR *pwszCommand,
+    HANDLE hPipeStdin,
+    HANDLE hPipeStdout,
+    HANDLE hPipeStderr,
+    HANDLE *phProcess
+    );
 
 ULONG CreateNormalProcessAsCurrentUser(
-		TCHAR *pwszCommand,
-		HANDLE *phProcess
-);
+    TCHAR *pwszCommand,
+    HANDLE *phProcess
+    );
 
 ULONG GrantDesktopAccess(
-	TCHAR *pszAccountName,
-	TCHAR *pszSystemName
-);
+    TCHAR *pszAccountName,
+    TCHAR *pszSystemName
+    );

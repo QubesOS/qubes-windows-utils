@@ -48,7 +48,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-TCHAR GetOption (
+TCHAR GetOption(
     int argc,
     TCHAR** argv,
     TCHAR* pszValidOpts,
@@ -80,9 +80,9 @@ TCHAR GetOption (
                         if (*psz == _T('\0'))
                         {
                             // must look at next argv for param
-                            if (iArg+1 < argc)
+                            if (iArg + 1 < argc)
                             {
-                                psz = &(argv[iArg+1][0]);
+                                psz = &(argv[iArg + 1][0]);
                                 if (*psz == _T('-') || *psz == _T('/'))
                                 {
                                     // next argv is a new option, so param
@@ -99,7 +99,6 @@ TCHAR GetOption (
                             {
                                 // reached end of args looking for param
                             }
-
                         }
                         else
                         {

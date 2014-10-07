@@ -16,7 +16,7 @@ static LONG WINAPI ErrUEF(LPEXCEPTION_POINTERS ep)
     }
 
     // TODO: stack trace
-    
+
     return EXCEPTION_EXECUTE_HANDLER; // terminate
 }
 

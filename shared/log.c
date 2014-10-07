@@ -32,7 +32,7 @@ static TCHAR g_LogLevelChar[] = {
 static void PurgeOldLogs(const IN TCHAR *logDir)
 {
     FILETIME ft;
-    PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER)&ft;
+    PULARGE_INTEGER thresholdTime = (PULARGE_INTEGER) &ft;
     WIN32_FIND_DATA findData;
     HANDLE findHandle;
     TCHAR searchMask[MAX_PATH];
@@ -56,7 +56,7 @@ static void PurgeOldLogs(const IN TCHAR *logDir)
 
     do
     {
-        if ((*(PULARGE_INTEGER)&findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
+        if ((*(PULARGE_INTEGER) &findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
         {
             // File is too old, delete.
             StringCchPrintf(filePath, RTL_NUMBER_OF(filePath), TEXT("%s\\%s"), logDir, findData.cFileName);
@@ -84,7 +84,7 @@ static TCHAR *LogGetName(void)
 // This should not call LogXXX to avoid infinite loop.
 static void LogReadLevel(void)
 {
-    DWORD status; 
+    DWORD status;
     status = CfgReadDword(LogGetName(), LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
 
     if (status != ERROR_SUCCESS)
@@ -322,7 +322,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
 
-    buffer = (TCHAR*)malloc(BUFFER_SIZE);
+    buffer = (TCHAR*) malloc(BUFFER_SIZE);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #ifdef UNICODE
@@ -361,7 +361,7 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
     {
         _ftprintf(stderr, TEXT("_LogFormat: ConvertUTF16ToUTF8 failed: error %d\n"), GetLastError());
         goto cleanup;
-}
+    }
     if (bufferUtf8[bufferSize - 1] != '\n')
         addNewline = TRUE;
 #else
@@ -376,9 +376,9 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
         if (!raw)
         {
 #ifdef UNICODE
-            if (!WriteFile(g_LogfileHandle, prefixBufferUtf8, (DWORD)prefixBufferSize, &written, NULL) || written != (DWORD)prefixBufferSize)
+            if (!WriteFile(g_LogfileHandle, prefixBufferUtf8, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
 #else
-            if (!WriteFile(g_LogfileHandle, prefixBuffer, (DWORD)prefixBufferSize, &written, NULL) || written != (DWORD)prefixBufferSize)
+            if (!WriteFile(g_LogfileHandle, prefixBuffer, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
 #endif
             {
                 _ftprintf(stderr, TEXT("_LogFormat: WriteFile failed: error %d\n"), GetLastError());
@@ -388,9 +388,9 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 
         // buffer_size is at most INT_MAX*2
 #ifdef UNICODE
-        if (!WriteFile(g_LogfileHandle, bufferUtf8, (DWORD)bufferSize, &written, NULL) || written != (DWORD)bufferSize)
+        if (!WriteFile(g_LogfileHandle, bufferUtf8, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
 #else
-        if (!WriteFile(g_LogfileHandle, buffer, (DWORD)bufferSize, &written, NULL) || written != (DWORD)bufferSize)
+        if (!WriteFile(g_LogfileHandle, buffer, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
 #endif
         {
             _ftprintf(stderr, TEXT("_LogFormat: WriteFile failed: error %d\n"), GetLastError());
@@ -481,7 +481,7 @@ DWORD _perror(const IN char *functionName, const IN TCHAR *prefix)
         NULL,
         errorCode,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (TCHAR*)&message,
+        (TCHAR*) &message,
         0,
         NULL);
 
@@ -516,7 +516,7 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
 {
     int i;
     TCHAR buff[17];
-    BYTE *pc = (BYTE*)addr;
+    BYTE *pc = (BYTE*) addr;
 
     if (len == 0)
         return;
@@ -526,10 +526,12 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
         LogDebugRaw("%s:\n", desc);
 
     // Process every byte in the data.
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < len; i++)
+    {
         // Multiple of 16 means new line (with line offset).
 
-        if ((i % 16) == 0) {
+        if ((i % 16) == 0)
+        {
             // Just don't print ASCII for the zeroth line.
             if (i != 0)
                 LogDebugRaw("  %s\n", buff);
@@ -555,7 +557,8 @@ void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len)
     // Pad out last line if not exactly 16 characters.
     if (i % 16 <= 8 && i % 16 != 0)
         LogDebugRaw(" ");
-    while ((i % 16) != 0) {
+    while ((i % 16) != 0)
+    {
         LogDebugRaw("   ");
         i++;
     }

@@ -1,7 +1,7 @@
 #pragma once
 #include <stdlib.h>
 
-// Circular memory queue implementation. 
+// Circular memory queue implementation.
 // All int-returning functions return 0 on success, <0 on failure.
 
 struct _buffer;
@@ -10,8 +10,8 @@ typedef struct _buffer buffer_t;
 // Underflow mode for read operations.
 typedef enum
 {
-	BUFFER_ALLOW_UNDERFLOW = 1,
-	BUFFER_NO_UNDERFLOW
+    BUFFER_ALLOW_UNDERFLOW = 1,
+    BUFFER_NO_UNDERFLOW
 } BUFFER_UNDERFLOW_MODE;
 
 // allocate memory and initialize, return 0 = failure
