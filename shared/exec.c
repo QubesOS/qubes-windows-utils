@@ -339,7 +339,7 @@ ULONG GrantRemoteSessionDesktopAccess(DWORD dwSessionId, TCHAR *pszAccountName, 
     if (dwCurrentSessionId == dwSessionId)
     {
         // We're in the same session, no need to run an additional process.
-        logf("GrantRemoteSessionDesktopAccess(): Already running in the specified session\n");
+        LogInfo("GrantRemoteSessionDesktopAccess(): Already running in the specified session\n");
         uResult = GrantDesktopAccess(pszAccountName, pszSystemName);
         if (ERROR_SUCCESS != uResult)
             perror("GrantRemoteSessionDesktopAccess(): GrantDesktopAccess()");
@@ -435,7 +435,7 @@ ULONG GrantRemoteSessionDesktopAccess(DWORD dwSessionId, TCHAR *pszAccountName, 
         if (WAIT_TIMEOUT == uResult)
         {
             uResult = ERROR_ACCESS_DENIED;
-            logf("GrantRemoteSessionDesktopAccess(): WaitForSingleObject() timed out\n");
+            LogInfo("GrantRemoteSessionDesktopAccess(): WaitForSingleObject() timed out\n");
         }
         else
         {
