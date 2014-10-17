@@ -1,417 +1,376 @@
 #include "exec.h"
 #include "log.h"
 
-ULONG GetAccountSid(TCHAR *pszAccountName, TCHAR *pszSystemName, PSID *ppSid)
+DWORD GetAccountSid(
+    IN const WCHAR *accountName,
+    IN const WCHAR *systemName,
+    OUT SID **sid
+    )
 {
     SID_NAME_USE sidUsage;
     DWORD cbSid;
     DWORD cchReferencedDomainName = MAX_PATH;
-    TCHAR ReferencedDomainName[MAX_PATH];
-    ULONG uResult;
-    PSID pSid;
+    WCHAR referencedDomainName[MAX_PATH];
+    DWORD status;
 
-    if (!pszAccountName || !ppSid)
+    if (!accountName || !sid)
         return ERROR_INVALID_PARAMETER;
 
     cbSid = 0;
-    *ppSid = NULL;
+    *sid = NULL;
 
     if (!LookupAccountName(
-        pszSystemName,
-        pszAccountName,
+        systemName,
+        accountName,
         NULL,
         &cbSid,
-        ReferencedDomainName,
+        referencedDomainName,
         &cchReferencedDomainName,
         &sidUsage))
     {
-        uResult = GetLastError();
-        if (ERROR_INSUFFICIENT_BUFFER != uResult)
+        status = GetLastError();
+        if (ERROR_INSUFFICIENT_BUFFER != status)
         {
-            perror("GetAccountSid(): LookupAccountName()");
-            return uResult;
+            return perror("LookupAccountName");
         }
     }
 
-    pSid = LocalAlloc(LPTR, cbSid);
-    if (!pSid)
+    *sid = LocalAlloc(LPTR, cbSid);
+    if (*sid == NULL)
     {
-        uResult = GetLastError();
-        perror("GetAccountSid(): LocalAlloc()");
-        return uResult;
+        return perror("LocalAlloc");
     }
 
     if (!LookupAccountName(
-        pszSystemName,
-        pszAccountName,
-        pSid,
+        systemName,
+        accountName,
+        *sid,
         &cbSid,
-        ReferencedDomainName,
+        referencedDomainName,
         &cchReferencedDomainName,
         &sidUsage))
     {
-        uResult = GetLastError();
-        LocalFree(pSid);
-        perror("GetAccountSid(): LookupAccountName()");
-        return uResult;
+        status = GetLastError();
+        LocalFree(*sid);
+        return perror2(status, "LookupAccountName");
     }
-
-    *ppSid = pSid;
 
     return ERROR_SUCCESS;
 }
 
-ULONG GetObjectSecurityDescriptorDacl(HANDLE hObject, SECURITY_DESCRIPTOR **ppSD, BOOL *pbDaclPresent, PACL *ppDacl)
+DWORD GetObjectSecurityDescriptorDacl(
+    IN HANDLE object,
+    OUT SECURITY_DESCRIPTOR **sd,
+    OUT BOOL *daclPresent,
+    OUT ACL **dacl
+    )
 {
-    ULONG uResult;
-    SECURITY_INFORMATION SIRequested;
-    SECURITY_DESCRIPTOR	*pSD = NULL;
-    DWORD nLengthNeeded;
-    BOOL bDaclPresent = FALSE;
-    PACL pDacl = NULL;
-    BOOL bDaclDefaulted;
+    DWORD status;
+    SECURITY_INFORMATION si;
+    DWORD sizeNeeded;
+    BOOL daclDefaulted;
 
-    if (!ppSD || !pbDaclPresent || !ppDacl)
+    if (!sd || !daclPresent || !dacl)
         return ERROR_INVALID_PARAMETER;
 
-    *ppSD = NULL;
-    *ppDacl = NULL;
-    *pbDaclPresent = FALSE;
-
-    SIRequested = DACL_SECURITY_INFORMATION;
+    si = DACL_SECURITY_INFORMATION;
 
     if (!GetUserObjectSecurity(
-        hObject,
-        &SIRequested,
+        object,
+        &si,
         NULL,
         0,
-        &nLengthNeeded))
+        &sizeNeeded))
     {
-        uResult = GetLastError();
-        if (ERROR_INSUFFICIENT_BUFFER != uResult)
+        status = GetLastError();
+        if (ERROR_INSUFFICIENT_BUFFER != status)
         {
-            perror("GetObjectSecurityDescriptorDacl(): GetUserObjectSecurity()");
-            return uResult;
+            return perror("GetUserObjectSecurity");
         }
     }
 
-    pSD = LocalAlloc(LPTR, nLengthNeeded);
-    if (!pSD)
+    *sd = LocalAlloc(LPTR, sizeNeeded);
+    if (*sd == NULL)
     {
-        uResult = GetLastError();
-        perror("GetObjectSecurityDescriptorDacl(): LocalAlloc()");
-        return uResult;
+        return perror("LocalAlloc");
     }
 
     if (!GetUserObjectSecurity(
-        hObject,
-        &SIRequested,
-        pSD,
-        nLengthNeeded,
-        &nLengthNeeded))
+        object,
+        &si,
+        *sd,
+        sizeNeeded,
+        &sizeNeeded))
     {
-        uResult = GetLastError();
-        perror("GetObjectSecurityDescriptorDacl(): GetUserObjectSecurity()");
-        return uResult;
+        return perror("GetUserObjectSecurity");
     }
 
-    if (!GetSecurityDescriptorDacl(pSD, &bDaclPresent, &pDacl, &bDaclDefaulted))
+    if (!GetSecurityDescriptorDacl(*sd, daclPresent, dacl, &daclDefaulted))
     {
-        uResult = GetLastError();
-        LocalFree(pSD);
-        perror("GetObjectSecurityDescriptorDacl(): GetSecurityDescriptorDacl()");
-        return uResult;
+        status = GetLastError();
+        LocalFree(*sd);
+        return perror2(status, "GetSecurityDescriptorDacl");
     }
-
-    *ppSD = pSD;
-    *pbDaclPresent = bDaclPresent;
-    *ppDacl = pDacl;
 
     return ERROR_SUCCESS;
 }
 
-ULONG MergeWithExistingDacl(HANDLE hObject, ULONG cCountOfExplicitEntries, EXPLICIT_ACCESS *pListOfExplicitEntries)
+DWORD MergeWithExistingDacl(
+    IN HANDLE object,
+    IN ULONG countOfExplicitEntries,
+    IN EXPLICIT_ACCESS *listOfExplicitEntries
+    )
 {
-    ULONG uResult;
-    SECURITY_DESCRIPTOR	*pSD = NULL;
-    BOOL bDaclPresent = FALSE;
-    PACL pDacl = NULL;
-    PACL pNewAcl = NULL;
-    SECURITY_INFORMATION SIRequested = DACL_SECURITY_INFORMATION;
+    DWORD status = ERROR_UNIDENTIFIED_ERROR;
+    SECURITY_DESCRIPTOR	*sd = NULL;
+    BOOL daclPresent = FALSE;
+    ACL *dacl = NULL;
+    ACL *newAcl = NULL;
+    SECURITY_INFORMATION siRequested = DACL_SECURITY_INFORMATION;
 
-    if (!cCountOfExplicitEntries || !pListOfExplicitEntries)
+    if (countOfExplicitEntries == 0 || listOfExplicitEntries == NULL)
         return ERROR_INVALID_PARAMETER;
 
-    uResult = GetObjectSecurityDescriptorDacl(hObject, &pSD, &bDaclPresent, &pDacl);
-    if (ERROR_SUCCESS != uResult)
+    status = GetObjectSecurityDescriptorDacl(object, &sd, &daclPresent, &dacl);
+    if (ERROR_SUCCESS != status)
     {
-        perror("MergeWithExistingDacl(): GetObjectSecurityDescriptorDacl()");
-        return uResult;
+        perror("GetObjectSecurityDescriptorDacl");
+        goto cleanup;
     }
 
-    uResult = SetEntriesInAcl(cCountOfExplicitEntries, pListOfExplicitEntries, pDacl, &pNewAcl);
-    LocalFree(pSD);
+    status = SetEntriesInAcl(countOfExplicitEntries, listOfExplicitEntries, dacl, &newAcl);
 
-    if (ERROR_SUCCESS != uResult)
+    if (ERROR_SUCCESS != status)
     {
-        perror("MergeWithExistingDacl(): SetEntriesInAcl()");
-        return uResult;
+        perror("SetEntriesInAcl");
+        goto cleanup;
     }
 
-    pSD = LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
-    if (!pSD)
+    sd = LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+    if (!sd)
     {
-        uResult = GetLastError();
-        LocalFree(pNewAcl);
-        perror("MergeWithExistingDacl(): LocalAlloc()");
-        return uResult;
+        status = perror("LocalAlloc");
+        goto cleanup;
     }
 
-    if (!InitializeSecurityDescriptor(pSD, SECURITY_DESCRIPTOR_REVISION))
+    if (!InitializeSecurityDescriptor(sd, SECURITY_DESCRIPTOR_REVISION))
     {
-        uResult = GetLastError();
-        LocalFree(pNewAcl);
-        LocalFree(pSD);
-        perror("MergeWithExistingDacl(): InitializeSecurityDescriptor()");
-        return uResult;
+        status = perror("InitializeSecurityDescriptor");
+        goto cleanup;
     }
 
-    if (!SetSecurityDescriptorDacl(pSD, TRUE, pNewAcl, FALSE))
+    if (!SetSecurityDescriptorDacl(sd, TRUE, newAcl, FALSE))
     {
-        uResult = GetLastError();
-        LocalFree(pNewAcl);
-        LocalFree(pSD);
-        perror("MergeWithExistingDacl(): SetSecurityDescriptorDacl()");
-        return uResult;
+        status = perror("SetSecurityDescriptorDacl");
+        goto cleanup;
     }
 
-    if (!SetUserObjectSecurity(hObject, &SIRequested, pSD))
+    if (!SetUserObjectSecurity(object, &siRequested, sd))
     {
-        uResult = GetLastError();
-        LocalFree(pNewAcl);
-        LocalFree(pSD);
-        perror("MergeWithExistingDacl(): SetUserObjectSecurity()");
-        return uResult;
+        status = perror("SetUserObjectSecurity");
+        goto cleanup;
     }
 
-    LocalFree(pNewAcl);
-    LocalFree(pSD);
+    status = ERROR_SUCCESS;
 
-    return ERROR_SUCCESS;
+cleanup:
+    if (newAcl)
+        LocalFree(newAcl);
+    if (sd)
+        LocalFree(sd);
+
+    return status;
 }
 
-ULONG GrantDesktopAccess(TCHAR *pszAccountName, TCHAR *pszSystemName)
+DWORD GrantDesktopAccess(
+    IN const WCHAR *accountName,
+    IN const WCHAR *systemName
+    )
 {
-    HWINSTA hWindowStation;
-    HWINSTA hOriginalWindowStation;
-    HDESK hDesktop;
-    ULONG uResult;
-    PSID pSid = NULL;
-    EXPLICIT_ACCESS NewAccessAllowedAces[2];
+    HWINSTA originalWindowStation;
+    HWINSTA windowStation = NULL;
+    HDESK desktop = NULL;
+    DWORD status = ERROR_UNIDENTIFIED_ERROR;
+    SID *sid = NULL;
+    EXPLICIT_ACCESS newEa[2];
 
-    if (!pszAccountName)
+    if (!accountName)
         return ERROR_INVALID_PARAMETER;
 
-    hOriginalWindowStation = GetProcessWindowStation();
-    if (!hOriginalWindowStation)
+    originalWindowStation = GetProcessWindowStation();
+    if (!originalWindowStation)
     {
-        uResult = GetLastError();
-        perror("GrantDesktopAccess(): GetProcessWindowStation()");
-        return uResult;
+        return perror("GetProcessWindowStation");
     }
 
-    hWindowStation = OpenWindowStation(
-        TEXT("Winsta0"),
+    windowStation = OpenWindowStation(
+        L"WinSta0",
         FALSE,
         READ_CONTROL | WRITE_DAC);
-    if (!hWindowStation)
+
+    if (!windowStation)
     {
-        uResult = GetLastError();
-        perror("GrantDesktopAccess(): OpenWindowStation()");
-        return uResult;
+        return perror("OpenWindowStation");
     }
 
-    if (!SetProcessWindowStation(hWindowStation))
+    if (!SetProcessWindowStation(windowStation))
     {
-        uResult = GetLastError();
-        CloseWindowStation(hWindowStation);
-        perror("GrantDesktopAccess(): SetProcessWindowStation()");
-        return uResult;
+        status = perror("SetProcessWindowStation");
+        goto cleanup;
     }
 
-    hDesktop = OpenDesktop(
+    desktop = OpenDesktop(
         TEXT("Default"),
         0,
         FALSE,
         READ_CONTROL | WRITE_DAC | DESKTOP_WRITEOBJECTS | DESKTOP_READOBJECTS);
 
-    if (!hDesktop)
+    if (!desktop)
     {
-        uResult = GetLastError();
-        CloseWindowStation(hWindowStation);
-        perror("GrantDesktopAccess(): OpenDesktop()");
-        return uResult;
+        status = perror("OpenDesktop");
+        goto cleanup;
     }
 
-    if (!SetProcessWindowStation(hOriginalWindowStation))
+    if (!SetProcessWindowStation(originalWindowStation))
     {
-        uResult = GetLastError();
-        CloseDesktop(hDesktop);
-        CloseWindowStation(hWindowStation);
-        perror("GrantDesktopAccess(): SetProcessWindowStation(Original)");
-        return uResult;
+        status = perror("SetProcessWindowStation(Original)");
+        goto cleanup;
     }
 
-    uResult = GetAccountSid(pszAccountName, pszSystemName, &pSid);
-    if (ERROR_SUCCESS != uResult)
+    status = GetAccountSid(accountName, systemName, &sid);
+    if (ERROR_SUCCESS != status)
     {
-        CloseDesktop(hDesktop);
-        CloseWindowStation(hWindowStation);
-        perror("GrantDesktopAccess(): GetAccountSid()");
-        return uResult;
+        perror2(status, "GetAccountSid");
+        goto cleanup;
     }
 
-    NewAccessAllowedAces[0].grfAccessPermissions = GENERIC_ACCESS;
-    NewAccessAllowedAces[0].grfAccessMode = GRANT_ACCESS;
-    NewAccessAllowedAces[0].grfInheritance = CONTAINER_INHERIT_ACE | INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE;
-    NewAccessAllowedAces[0].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
-    NewAccessAllowedAces[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
-    NewAccessAllowedAces[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
-    NewAccessAllowedAces[0].Trustee.ptstrName = (PTSTR) pSid;
+    newEa[0].grfAccessPermissions = GENERIC_ACCESS;
+    newEa[0].grfAccessMode = GRANT_ACCESS;
+    newEa[0].grfInheritance = CONTAINER_INHERIT_ACE | INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE;
+    newEa[0].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+    newEa[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    newEa[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
+    newEa[0].Trustee.ptstrName = (WCHAR *) sid;
 
-    NewAccessAllowedAces[1] = NewAccessAllowedAces[0];
+    newEa[1] = newEa[0];
 
-    NewAccessAllowedAces[1].grfAccessPermissions = WINSTA_ALL;
-    NewAccessAllowedAces[1].grfInheritance = NO_PROPAGATE_INHERIT_ACE;
+    newEa[1].grfAccessPermissions = WINSTA_ALL;
+    newEa[1].grfInheritance = NO_PROPAGATE_INHERIT_ACE;
 
-    uResult = MergeWithExistingDacl(hWindowStation, 2, NewAccessAllowedAces);
-    CloseWindowStation(hWindowStation);
-
-    if (ERROR_SUCCESS != uResult)
+    status = MergeWithExistingDacl(windowStation, 2, newEa);
+    if (ERROR_SUCCESS != status)
     {
-        CloseDesktop(hDesktop);
-        LocalFree(pSid);
-        perror("GrantDesktopAccess(): MergeWithExistingDacl(WindowStation)");
-        return uResult;
+        perror2(status, "MergeWithExistingDacl(WindowStation)");
+        goto cleanup;
     }
 
-    NewAccessAllowedAces[0].grfAccessPermissions = DESKTOP_ALL;
-    NewAccessAllowedAces[0].grfAccessMode = GRANT_ACCESS;
-    NewAccessAllowedAces[0].grfInheritance = 0;
+    newEa[0].grfAccessPermissions = DESKTOP_ALL;
+    newEa[0].grfAccessMode = GRANT_ACCESS;
+    newEa[0].grfInheritance = 0;
 
-    uResult = MergeWithExistingDacl(hDesktop, 1, NewAccessAllowedAces);
-    CloseDesktop(hDesktop);
-
-    if (ERROR_SUCCESS != uResult)
+    status = MergeWithExistingDacl(desktop, 1, newEa);
+    if (ERROR_SUCCESS != status)
     {
-        LocalFree(pSid);
-        perror("GrantDesktopAccess(): MergeWithExistingDacl(Desktop)");
-        return uResult;
+        perror2(status, "MergeWithExistingDacl(Desktop)");
+        goto cleanup;
     }
 
-    LocalFree(pSid);
+cleanup:
+    if (desktop)
+        CloseDesktop(desktop);
+    if (windowStation)
+        CloseWindowStation(windowStation);
+    if (sid)
+        LocalFree(sid);
     return ERROR_SUCCESS;
 }
 
 // Open a window station and a desktop in another session, grant access to those handles
-ULONG GrantRemoteSessionDesktopAccess(DWORD dwSessionId, TCHAR *pszAccountName, TCHAR *pszSystemName)
+DWORD GrantRemoteSessionDesktopAccess(
+    IN DWORD sessionId,
+    IN const WCHAR *accountName,
+    IN WCHAR *systemName
+    )
 {
-    ULONG uResult;
-    HRESULT hResult;
-    HANDLE hToken;
-    HANDLE hTokenDuplicate;
-    TCHAR szFullPath[MAX_PATH + 1];
-    TCHAR szArguments[UNLEN + 1];
-    PROCESS_INFORMATION pi;
-    STARTUPINFO si;
-    DWORD dwCurrentSessionId;
+    DWORD status = ERROR_UNIDENTIFIED_ERROR;
+    HRESULT hresult;
+    HANDLE token = NULL;
+    HANDLE tokenDuplicate = NULL;
+    WCHAR fullPath[MAX_PATH + 1] = { 0 };
+    WCHAR arguments[UNLEN + 1];
+    PROCESS_INFORMATION pi = { 0 };
+    STARTUPINFO si = { 0 };
+    DWORD currentSessionId;
 
-    if (!pszAccountName)
+    if (!accountName)
         return ERROR_INVALID_PARAMETER;
 
-    if (!ProcessIdToSessionId(GetCurrentProcessId(), &dwCurrentSessionId))
+    if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
     {
-        uResult = GetLastError();
-        perror("GrantRemoteSessionDesktopAccess(): ProcessIdToSessionId()");
-        return uResult;
+        return perror("ProcessIdToSessionId");
     }
 
-    if (dwCurrentSessionId == dwSessionId)
+    if (currentSessionId == sessionId)
     {
         // We're in the same session, no need to run an additional process.
-        LogInfo("GrantRemoteSessionDesktopAccess(): Already running in the specified session\n");
-        uResult = GrantDesktopAccess(pszAccountName, pszSystemName);
-        if (ERROR_SUCCESS != uResult)
-            perror("GrantRemoteSessionDesktopAccess(): GrantDesktopAccess()");
+        LogInfo("Already running in the specified session");
+        status = GrantDesktopAccess(accountName, systemName);
+        if (ERROR_SUCCESS != status)
+            perror2(status, "GrantDesktopAccess");
 
-        return uResult;
+        return status;
     }
 
-    if (!OpenThreadToken(GetCurrentThread(), TOKEN_ALL_ACCESS, TRUE, &hToken))
+    if (!OpenThreadToken(GetCurrentThread(), TOKEN_ALL_ACCESS, TRUE, &token))
     {
-        //		uResult = GetLastError();
-        //		perror("GrantRemoteSessionDesktopAccess(): OpenThreadToken()");
-
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &hToken))
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token))
         {
-            uResult = GetLastError();
-            perror("GrantRemoteSessionDesktopAccess(): OpenProcessToken()");
-            return uResult;
+            return perror("OpenProcessToken");
         }
     }
 
     if (!DuplicateTokenEx(
-        hToken,
+        token,
         MAXIMUM_ALLOWED,
         NULL,
         SecurityIdentification,
         TokenPrimary,
-        &hTokenDuplicate))
+        &tokenDuplicate))
     {
-        uResult = GetLastError();
-        CloseHandle(hToken);
-        perror("GrantRemoteSessionDesktopAccess(): DuplicateTokenEx()");
-        return uResult;
-    }
-    CloseHandle(hToken);
-
-    hToken = hTokenDuplicate;
-
-    if (!SetTokenInformation(hToken, TokenSessionId, &dwSessionId, sizeof(dwSessionId)))
-    {
-        uResult = GetLastError();
-
-        CloseHandle(hToken);
-        perror("GrantRemoteSessionDesktopAccess(): SetTokenInformation()");
-        return uResult;
+        status = perror("DuplicateTokenEx");
+        goto cleanup;
     }
 
-    memset(szFullPath, 0, sizeof(szFullPath));
-    if (!GetModuleFileName(NULL, szFullPath, RTL_NUMBER_OF(szFullPath) - 1))
+    CloseHandle(token);
+    token = tokenDuplicate;
+
+    if (!SetTokenInformation(token, TokenSessionId, &sessionId, sizeof(sessionId)))
     {
-        uResult = GetLastError();
-        CloseHandle(hToken);
-        perror("GrantRemoteSessionDesktopAccess(): GetModuleFileName()");
-        return uResult;
+        status = perror("SetTokenInformation");
+        goto cleanup;
     }
 
-    hResult = StringCchPrintf(szArguments, RTL_NUMBER_OF(szArguments), TEXT("\"%s\" -a %s"), szFullPath, pszAccountName);
-    if (FAILED(hResult))
+    if (!GetModuleFileName(NULL, fullPath, RTL_NUMBER_OF(fullPath) - 1))
     {
-        CloseHandle(hToken);
-        perror("GrantRemoteSessionDesktopAccess(): StringCchPrintf()");
-        return hResult;
+        status = perror("GetModuleFileName");
+        goto cleanup;
     }
 
-    memset(&si, 0, sizeof(si));
+    hresult = StringCchPrintf(arguments, RTL_NUMBER_OF(arguments), L"\"%s\" -a %s", fullPath, accountName);
+    if (FAILED(hresult))
+    {
+        LogError("StringCchPrintf failed");
+        goto cleanup;
+    }
+
     si.cb = sizeof(si);
 
-    LogDebug("GrantRemoteSessionDesktopAccess(): CreateProcessAsUser('%S')\n", szArguments);
+    LogDebug("CreateProcessAsUser(%s)", arguments);
 
     if (!CreateProcessAsUser(
-        hToken,
-        szFullPath,
-        szArguments,
+        token,
+        fullPath,
+        arguments,
         NULL,
         NULL,
         TRUE, // handles are inherited
@@ -421,350 +380,326 @@ ULONG GrantRemoteSessionDesktopAccess(DWORD dwSessionId, TCHAR *pszAccountName, 
         &si,
         &pi))
     {
-        uResult = GetLastError();
-        CloseHandle(hToken);
-        perror("GrantRemoteSessionDesktopAccess(): CreateProcessAsUser()");
-        return uResult;
+        status = perror("CreateProcessAsUser");
+        goto cleanup;
     }
 
-    CloseHandle(pi.hThread);
-    uResult = WaitForSingleObject(pi.hProcess, 1000);
+    status = WaitForSingleObject(pi.hProcess, 1000);
 
-    if (WAIT_OBJECT_0 != uResult)
+    if (WAIT_OBJECT_0 != status)
     {
-        if (WAIT_TIMEOUT == uResult)
+        if (WAIT_TIMEOUT == status)
         {
-            uResult = ERROR_ACCESS_DENIED;
-            LogInfo("GrantRemoteSessionDesktopAccess(): WaitForSingleObject() timed out\n");
+            status = ERROR_ACCESS_DENIED;
+            LogInfo("WaitForSingleObject timed out");
         }
         else
         {
-            uResult = GetLastError();
-            perror("GrantRemoteSessionDesktopAccess(): WaitForSingleObject()");
+            status = perror("WaitForSingleObject");
         }
-
-        CloseHandle(pi.hProcess);
-        CloseHandle(hToken);
-        return uResult;
     }
 
-    CloseHandle(pi.hProcess);
-    CloseHandle(hToken);
-    return ERROR_SUCCESS;
+cleanup:
+    if (pi.hThread)
+        CloseHandle(pi.hThread);
+    if (pi.hProcess)
+        CloseHandle(pi.hProcess);
+    if (token)
+        CloseHandle(token);
+    return status;
 }
 
-ULONG CreatePipedProcessAsCurrentUser(
-    TCHAR  *pwszCommand,
-    HANDLE hPipeStdin,
-    HANDLE hPipeStdout,
-    HANDLE hPipeStderr,
-    HANDLE *phProcess)
+DWORD CreatePipedProcessAsCurrentUser(
+    IN WCHAR *commandLine, // non-const, CreateProcess can modify it
+    IN HANDLE pipeStdin,
+    IN HANDLE pipeStdout,
+    IN HANDLE pipeStderr,
+    OUT HANDLE *process
+    )
 {
-    PROCESS_INFORMATION pi;
-    STARTUPINFO si;
-    ULONG uResult;
-    BOOL bInheritHandles;
+    PROCESS_INFORMATION pi = { 0 };
+    STARTUPINFO si = { 0 };
+    BOOL inheritHandles;
 
-    if (!pwszCommand || !phProcess)
+    if (!commandLine || !process)
         return ERROR_INVALID_PARAMETER;
 
-    *phProcess = INVALID_HANDLE_VALUE;
+    *process = INVALID_HANDLE_VALUE;
 
-    LogDebug("CreatePipedProcessAsCurrentUser: %s\n", pwszCommand);
+    LogDebug("%s", commandLine);
 
-    memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
 
-    bInheritHandles = FALSE;
+    inheritHandles = FALSE;
 
-    if (INVALID_HANDLE_VALUE != hPipeStdin &&
-        INVALID_HANDLE_VALUE != hPipeStdout &&
-        INVALID_HANDLE_VALUE != hPipeStderr)
+    if (INVALID_HANDLE_VALUE != pipeStdin &&
+        INVALID_HANDLE_VALUE != pipeStdout &&
+        INVALID_HANDLE_VALUE != pipeStderr)
     {
         si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdInput = hPipeStdin;
-        si.hStdOutput = hPipeStdout;
-        si.hStdError = hPipeStderr;
+        si.hStdInput = pipeStdin;
+        si.hStdOutput = pipeStdout;
+        si.hStdError = pipeStderr;
 
-        bInheritHandles = TRUE;
+        inheritHandles = TRUE;
     }
 
-    if (!CreateProcessW(
+    if (!CreateProcess(
         NULL,
-        pwszCommand,
+        commandLine,
         NULL,
         NULL,
-        bInheritHandles, // inherit handles if IO is piped
+        inheritHandles, // inherit handles if IO is piped
         CREATE_NO_WINDOW,
         NULL,
         NULL,
         &si,
         &pi))
     {
-        uResult = GetLastError();
-        perror("CreatePipedProcessAsCurrentUser(): CreateProcess()");
-        return uResult;
+        return perror("CreateProcess");
     }
 
-    LogDebug("CreatePipedProcessAsCurrentUser(): pid %d\n", pi.dwProcessId);
+    LogDebug("pid %lu", pi.dwProcessId);
 
-    *phProcess = pi.hProcess;
+    *process = pi.hProcess;
     CloseHandle(pi.hThread);
 
     return ERROR_SUCCESS;
 }
 
-ULONG CreatePipedProcessAsUser(
-    TCHAR *pwszUserName,
-    TCHAR *pwszUserPassword,
-    TCHAR *pwszCommand,
-    BOOL bRunInteractively,
-    HANDLE hPipeStdin,
-    HANDLE hPipeStdout,
-    HANDLE hPipeStderr,
-    HANDLE *phProcess)
+DWORD CreatePipedProcessAsUser(
+    IN const WCHAR *userName,
+    IN const WCHAR *userPassword,
+    IN WCHAR *commandLine, // non-const, CreateProcess can modify it
+    IN BOOL runInteractively,
+    IN HANDLE pipeStdin,
+    IN HANDLE pipeStdout,
+    IN HANDLE pipeStderr,
+    OUT HANDLE *process
+    )
 {
-    DWORD dwActiveSessionId;
-    DWORD dwCurrentSessionId;
-    ULONG uResult;
-    HANDLE hUserToken;
-    HANDLE hUserTokenDuplicate;
-    PROCESS_INFORMATION pi;
-    STARTUPINFO si;
-    void *pEnvironment;
-    TCHAR wszLoggedUserName[UNLEN + 1];
+    DWORD consoleSessionId;
+    DWORD currentSessionId;
+    DWORD status = ERROR_UNIDENTIFIED_ERROR;
+    HANDLE userToken = NULL;
+    HANDLE userTokenDuplicate = NULL;
+    PROCESS_INFORMATION pi = { 0 };
+    STARTUPINFO si = { 0 };
+    void *environment = NULL;
+    WCHAR loggedUserName[UNLEN + 1];
     DWORD nSize;
-    BOOL bInheritHandles;
-    BOOL bUserIsLoggedOn;
+    BOOL inheritHandles;
+    BOOL userIsLoggedOn;
+    BOOL impersonating = FALSE;
 
-    if (!pwszUserName || !pwszCommand || !phProcess)
+    if (!userName || !commandLine || !process)
         return ERROR_INVALID_PARAMETER;
 
-    *phProcess = INVALID_HANDLE_VALUE;
-    LogDebug("CreatePipedProcessAsUser: %s, %s\n", pwszUserName, pwszCommand);
+    *process = INVALID_HANDLE_VALUE;
+    LogDebug("%s, %s", userName, commandLine);
 
-    if (!ProcessIdToSessionId(GetCurrentProcessId(), &dwCurrentSessionId))
+    if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
     {
-        uResult = GetLastError();
-        perror("CreatePipedProcessAsUser(): ProcessIdToSessionId()");
-        return uResult;
+        return perror("ProcessIdToSessionId");
     }
 
-    dwActiveSessionId = WTSGetActiveConsoleSessionId();
-    if (0xFFFFFFFF == dwActiveSessionId)
+    consoleSessionId = WTSGetActiveConsoleSessionId();
+    if (0xFFFFFFFF == consoleSessionId)
     {
-        uResult = GetLastError();
-
-        // There is no clear indication in the manual that WTSGetActiveConsoleSessionId() sets the last error properly.
-        if (ERROR_SUCCESS == uResult)
-            uResult = ERROR_NOT_SUPPORTED;
-
-        perror("CreatePipedProcessAsUser(): WTSGetActiveConsoleSessionId()");
-        return uResult;
+        LogWarning("No active console session");
+        return ERROR_NOT_SUPPORTED;
     }
 
-    if (!WTSQueryUserToken(dwActiveSessionId, &hUserToken))
+    if (!WTSQueryUserToken(consoleSessionId, &userToken))
     {
-        uResult = GetLastError();
-        perror("CreatePipedProcessAsUser(): WTSQueryUserToken()");
-        return uResult;
+        return perror("WTSQueryUserToken");
     }
 
     if (!DuplicateTokenEx(
-        hUserToken,
+        userToken,
         MAXIMUM_ALLOWED,
         NULL,
         SecurityIdentification,
         TokenPrimary,
-        &hUserTokenDuplicate))
+        &userTokenDuplicate))
     {
-        uResult = GetLastError();
-        CloseHandle(hUserToken);
-        perror("CreatePipedProcessAsUser(): DuplicateTokenEx()");
-        return uResult;
+        status = perror("DuplicateTokenEx");
+        goto cleanup;
     }
 
-    CloseHandle(hUserToken);
-
-    hUserToken = hUserTokenDuplicate;
+    CloseHandle(userToken);
+    userToken = userTokenDuplicate;
 
     // Check if the logged on user is the same as the user specified by pwszUserName -
     // in that case we won't need to do LogonUser()
-    if (!ImpersonateLoggedOnUser(hUserToken))
+    if (!ImpersonateLoggedOnUser(userToken))
     {
-        uResult = GetLastError();
-        CloseHandle(hUserToken);
-        perror("CreatePipedProcessAsUser(): ImpersonateLoggedOnUser()");
-        return uResult;
+        status = perror("ImpersonateLoggedOnUser");
+        goto cleanup;
     }
 
-    nSize = RTL_NUMBER_OF(wszLoggedUserName);
-    if (!GetUserName(wszLoggedUserName, &nSize))
-    {
-        uResult = GetLastError();
+    impersonating = TRUE;
 
-        RevertToSelf();
-        CloseHandle(hUserToken);
-        perror("CreatePipedProcessAsUser(): GetUserName()");
-        return uResult;
+    nSize = RTL_NUMBER_OF(loggedUserName);
+    if (!GetUserName(loggedUserName, &nSize))
+    {
+        status = perror("GetUserName");
+        goto cleanup;
     }
 
     RevertToSelf();
+    impersonating = FALSE;
+    userIsLoggedOn = FALSE;
 
-    bUserIsLoggedOn = FALSE;
-    if (_tcscmp(wszLoggedUserName, pwszUserName))
+    if (wcscmp(loggedUserName, userName))
     {
-        // Current user is not the one specified by pwszUserName. Log on the required user.
+        // Current user is not the one specified by userName. Log on the required user.
 
-        CloseHandle(hUserToken);
+        CloseHandle(userToken);
+        userToken = NULL;
 
         if (!LogonUser(
-            pwszUserName,
-            TEXT("."),
-            pwszUserPassword,
+            userName,
+            L".",
+            userPassword,
             LOGON32_LOGON_INTERACTIVE,
             LOGON32_PROVIDER_DEFAULT,
-            &hUserToken))
+            &userToken))
         {
-            uResult = GetLastError();
-            perror("CreatePipedProcessAsUser(): LogonUser()");
-            return uResult;
+            status = perror("LogonUser");
+            goto cleanup;
         }
     }
     else
-        bUserIsLoggedOn = TRUE;
+        userIsLoggedOn = TRUE;
 
-    if (!bRunInteractively)
-        dwActiveSessionId = dwCurrentSessionId;
+    if (!runInteractively)
+        consoleSessionId = currentSessionId;
 
-    if (!(bUserIsLoggedOn && bRunInteractively))
+    if (!(userIsLoggedOn && runInteractively))
     {
         // Do not do this if the specified user is currently logged on and the process is run interactively
         // because the user already has all the access to the window station and desktop, and
         // we don't have to change the session.
-        if (!SetTokenInformation(hUserToken, TokenSessionId, &dwActiveSessionId, sizeof(dwActiveSessionId)))
+        if (!SetTokenInformation(userToken, TokenSessionId, &consoleSessionId, sizeof(consoleSessionId)))
         {
-            uResult = GetLastError();
-            CloseHandle(hUserToken);
-            perror("CreatePipedProcessAsUser(): SetTokenInformation()");
-            return uResult;
+            status = perror("SetTokenInformation");
+            goto cleanup;
         }
 
-        uResult = GrantRemoteSessionDesktopAccess(dwActiveSessionId, pwszUserName, NULL);
-        if (ERROR_SUCCESS != uResult)
-            perror("CreatePipedProcessAsUser(): GrantRemoteSessionDesktopAccess()");
+        status = GrantRemoteSessionDesktopAccess(consoleSessionId, userName, NULL);
+        if (ERROR_SUCCESS != status)
+            perror2(status, "GrantRemoteSessionDesktopAccess");
     }
 
-    if (!CreateEnvironmentBlock(&pEnvironment, hUserToken, TRUE))
+    if (!CreateEnvironmentBlock(&environment, userToken, TRUE))
     {
-        uResult = GetLastError();
-        CloseHandle(hUserToken);
-        perror("CreatePipedProcessAsUser(): CreateEnvironmentBlock()");
-        return uResult;
+        status = perror("CreateEnvironmentBlock");
+        goto cleanup;
     }
 
-    if (!ImpersonateLoggedOnUser(hUserToken))
+    if (!ImpersonateLoggedOnUser(userToken))
     {
-        uResult = GetLastError();
-        CloseHandle(hUserToken);
-        DestroyEnvironmentBlock(pEnvironment);
-        perror("CreatePipedProcessAsUser(): ImpersonateLoggedOnUser()");
-        return uResult;
+        status = perror("ImpersonateLoggedOnUser");
+        goto cleanup;
     }
 
-    memset(&si, 0, sizeof(si));
+    impersonating = TRUE;
     si.cb = sizeof(si);
 
     si.lpDesktop = TEXT("Winsta0\\Default");
 
-    bInheritHandles = FALSE;
+    inheritHandles = FALSE;
 
-    if (INVALID_HANDLE_VALUE != hPipeStdin &&
-        INVALID_HANDLE_VALUE != hPipeStdout &&
-        INVALID_HANDLE_VALUE != hPipeStderr)
+    if (INVALID_HANDLE_VALUE != pipeStdin &&
+        INVALID_HANDLE_VALUE != pipeStdout &&
+        INVALID_HANDLE_VALUE != pipeStderr)
     {
         si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdInput = hPipeStdin;
-        si.hStdOutput = hPipeStdout;
-        si.hStdError = hPipeStderr;
+        si.hStdInput = pipeStdin;
+        si.hStdOutput = pipeStdout;
+        si.hStdError = pipeStderr;
 
-        bInheritHandles = TRUE;
+        inheritHandles = TRUE;
     }
 
     if (!CreateProcessAsUser(
-        hUserToken,
+        userToken,
         NULL,
-        pwszCommand,
+        commandLine,
         NULL,
         NULL,
-        bInheritHandles, // inherit handles if IO is piped
+        inheritHandles, // inherit handles if IO is piped
         NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
-        pEnvironment,
+        environment,
         NULL,
         &si,
         &pi))
     {
-        uResult = GetLastError();
-        RevertToSelf();
-        CloseHandle(hUserToken);
-        DestroyEnvironmentBlock(pEnvironment);
-        perror("CreatePipedProcessAsUser(): CreateProcessAsUser()");
-        return uResult;
+        status = perror("CreateProcessAsUser");
+        goto cleanup;
     }
 
-    RevertToSelf();
+    LogDebug("pid: %lu", pi.dwProcessId);
 
-    DestroyEnvironmentBlock(pEnvironment);
+    *process = pi.hProcess;
+    status = ERROR_SUCCESS;
 
-    LogDebug("CreatePipedProcessAsUser(): pid %d\n", pi.dwProcessId);
+cleanup:
+    if (impersonating)
+        RevertToSelf();
+    if (pi.hThread)
+        CloseHandle(pi.hThread);
+    if (userToken)
+        CloseHandle(userToken);
+    if (environment)
+        DestroyEnvironmentBlock(environment);
 
-    *phProcess = pi.hProcess;
-    CloseHandle(pi.hThread);
-    CloseHandle(hUserToken);
-
-    return ERROR_SUCCESS;
+    return status;
 }
 
-ULONG CreateNormalProcessAsUser(
-    TCHAR *pwszUserName,
-    TCHAR *pwszUserPassword,
-    TCHAR *pwszCommand,
-    BOOL bRunInteractively,
-    HANDLE *phProcess)
+DWORD CreateNormalProcessAsUser(
+    IN const WCHAR *userName,
+    IN const WCHAR *userPassword,
+    IN WCHAR *commandLine, // non-const, CreateProcess can modify it
+    IN BOOL runInteractively,
+    OUT HANDLE *process
+    )
 {
-    ULONG uResult;
+    DWORD status;
 
-    uResult = CreatePipedProcessAsUser(
-        pwszUserName,
-        pwszUserPassword,
-        pwszCommand,
-        bRunInteractively,
+    status = CreatePipedProcessAsUser(
+        userName,
+        userPassword,
+        commandLine,
+        runInteractively,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,
-        phProcess);
+        process);
 
-    if (ERROR_SUCCESS != uResult)
-        perror("CreateNormalProcessAsUser(): CreatePipedProcessAsUser()");
+    if (ERROR_SUCCESS != status)
+        perror2(status, "CreatePipedProcessAsUser");
 
-    return uResult;
+    return status;
 }
 
-ULONG CreateNormalProcessAsCurrentUser(
-    TCHAR *pwszCommand,
-    HANDLE *phProcess)
+DWORD CreateNormalProcessAsCurrentUser(
+    IN WCHAR *commandLine, // non-const, CreateProcess can modify it
+    OUT HANDLE *process
+    )
 {
-    ULONG uResult;
+    DWORD status;
 
-    uResult = CreatePipedProcessAsCurrentUser(
-        pwszCommand,
+    status = CreatePipedProcessAsCurrentUser(
+        commandLine,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,
-        phProcess);
+        process);
 
-    if (ERROR_SUCCESS != uResult)
-        perror("CreateNormalProcessAsCurrentUser(): CreatePipedProcessAsCurrentUser()");
+    if (ERROR_SUCCESS != status)
+        perror2(status, "CreatePipedProcessAsCurrentUser");
 
-    return uResult;
+    return status;
 }

@@ -9,13 +9,13 @@
 // Underscore functions are meant for internal use.
 
 // Registry config value: Log directory.
-#define LOG_CONFIG_PATH_VALUE TEXT("LogDir")
+#define LOG_CONFIG_PATH_VALUE L"LogDir"
 
 // Registry config value: Log level.
-#define LOG_CONFIG_LEVEL_VALUE TEXT("LogLevel")
+#define LOG_CONFIG_LEVEL_VALUE L"LogLevel"
 
 // Registry config value: Log retention time (seconds).
-#define LOG_CONFIG_RETENTION_VALUE TEXT("LogRetention")
+#define LOG_CONFIG_RETENTION_VALUE L"LogRetention"
 
 // Size of internal buffer in TCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
@@ -24,7 +24,7 @@
 #define LOG_DEFAULT_RETENTION_TIME (7*24*60*60ULL)
 
 // Default log directory (prepend "%SYSTEMDRIVE%\")
-#define LOG_DEFAULT_DIR TEXT("QubesLogs")
+#define LOG_DEFAULT_DIR L"QubesLogs"
 
 // Verbosity levels.
 enum
@@ -42,14 +42,14 @@ enum
 
 // Use the log directory and log level from registry config.
 // If logName is NULL, use current executable as name.
-DWORD LogInitDefault(const IN OPTIONAL TCHAR *logName);
+DWORD LogInitDefault(IN const WCHAR *logName OPTIONAL);
 
 // Formats unique log file path and calls LogStart.
 // If logDir is NULL, use default log location.
-void LogInit(const IN OPTIONAL TCHAR *logDir, const IN TCHAR *logName);
+void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName);
 
 // If logfilePath is NULL, use stderr.
-void LogStart(const IN OPTIONAL TCHAR *logfilePath);
+void LogStart(IN const WCHAR *logfilePath OPTIONAL);
 
 // Explicitly set verbosity level.
 void LogSetLevel(IN int level);
@@ -57,7 +57,7 @@ void LogSetLevel(IN int level);
 // Get current verbosity level.
 int LogGetLevel(void);
 
-void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN TCHAR *format, ...);
+void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const WCHAR *format, ...);
 // *_raw functions omit the timestamp, function name prefix and don't append newlines automatically.
 
 // Microsoft compilers define __FUNCTION__ as a string literal.
@@ -65,33 +65,33 @@ void _LogFormat(IN int level, IN BOOL raw, const IN char *functionName, const IN
 // but we need this to compile with GCC...
 
 // Helpers to not need to stick TEXT everywhere...
-#define LogVerbose(format, ...)     _LogFormat(LOG_LEVEL_VERBOSE, FALSE, __FUNCTION__, TEXT(format), ##__VA_ARGS__)
-#define LogVerboseRaw(format, ...)  _LogFormat(LOG_LEVEL_VERBOSE,  TRUE,         NULL, TEXT(format), ##__VA_ARGS__)
+#define LogVerbose(format, ...)     _LogFormat(LOG_LEVEL_VERBOSE, FALSE, __FUNCTION__, L##format, ##__VA_ARGS__)
+#define LogVerboseRaw(format, ...)  _LogFormat(LOG_LEVEL_VERBOSE,  TRUE,         NULL, L##format, ##__VA_ARGS__)
 
-#define LogDebug(format, ...)       _LogFormat(LOG_LEVEL_DEBUG,   FALSE, __FUNCTION__, TEXT(format), ##__VA_ARGS__)
-#define LogDebugRaw(format, ...)    _LogFormat(LOG_LEVEL_DEBUG,    TRUE,         NULL, TEXT(format), ##__VA_ARGS__)
+#define LogDebug(format, ...)       _LogFormat(LOG_LEVEL_DEBUG,   FALSE, __FUNCTION__, L##format, ##__VA_ARGS__)
+#define LogDebugRaw(format, ...)    _LogFormat(LOG_LEVEL_DEBUG,    TRUE,         NULL, L##format, ##__VA_ARGS__)
 
-#define LogInfo(format, ...)        _LogFormat(LOG_LEVEL_INFO,    FALSE, __FUNCTION__, TEXT(format), ##__VA_ARGS__)
-#define LogInfoRaw(format, ...)     _LogFormat(LOG_LEVEL_INFO,     TRUE,         NULL, TEXT(format), ##__VA_ARGS__)
+#define LogInfo(format, ...)        _LogFormat(LOG_LEVEL_INFO,    FALSE, __FUNCTION__, L##format, ##__VA_ARGS__)
+#define LogInfoRaw(format, ...)     _LogFormat(LOG_LEVEL_INFO,     TRUE,         NULL, L##format, ##__VA_ARGS__)
 
-#define LogWarning(format, ...)     _LogFormat(LOG_LEVEL_WARNING, FALSE, __FUNCTION__, TEXT(format), ##__VA_ARGS__)
-#define LogWarningRaw(format, ...)  _LogFormat(LOG_LEVEL_WARNING,  TRUE,         NULL, TEXT(format), ##__VA_ARGS__)
+#define LogWarning(format, ...)     _LogFormat(LOG_LEVEL_WARNING, FALSE, __FUNCTION__, L##format, ##__VA_ARGS__)
+#define LogWarningRaw(format, ...)  _LogFormat(LOG_LEVEL_WARNING,  TRUE,         NULL, L##format, ##__VA_ARGS__)
 
-#define LogError(format, ...)       _LogFormat(LOG_LEVEL_ERROR,   FALSE, __FUNCTION__, TEXT(format), ##__VA_ARGS__)
-#define LogErrorRaw(format, ...)    _LogFormat(LOG_LEVEL_ERROR,    TRUE,         NULL, TEXT(format), ##__VA_ARGS__)
+#define LogError(format, ...)       _LogFormat(LOG_LEVEL_ERROR,   FALSE, __FUNCTION__, L##format, ##__VA_ARGS__)
+#define LogErrorRaw(format, ...)    _LogFormat(LOG_LEVEL_ERROR,    TRUE,         NULL, L##format, ##__VA_ARGS__)
 
 // Returns last error code.
-DWORD _perror(const IN char *functionName, const IN TCHAR *prefix);
-#define perror(prefix) _perror(__FUNCTION__, TEXT(prefix))
+DWORD _perror(IN const char *functionName, IN const WCHAR *prefix);
+#define perror(prefix) _perror(__FUNCTION__, L##prefix)
 
-DWORD _perror2(const IN char *functionName, IN DWORD errorCode, const IN TCHAR *prefix);
-#define perror2(error, prefix) _perror2(__FUNCTION__, error, TEXT(prefix))
+DWORD _perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix);
+#define perror2(error, prefix) _perror2(__FUNCTION__, error, L##prefix)
 
 // hex_dump only logs if DEBUG is defined.
 // You can define LOG_NO_HEX_DUMP to disable it even in DEBUG build (it can generate massive log files).
-void _hex_dump(const IN TCHAR *desc, const IN void *addr, IN int len);
+void _hex_dump(IN const WCHAR *desc, IN const void *addr, IN int len);
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(LOG_NO_HEX_DUMP)
-#define hex_dump(desc, addr, len) _hex_dump(TEXT(desc), addr, len)
+#define hex_dump(desc, addr, len) _hex_dump(L##desc, addr, len)
 #else
 #define hex_dump(desc, addr, len)
 #endif

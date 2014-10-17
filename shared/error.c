@@ -3,7 +3,7 @@
 
 // Unhandled exception filter that logs the exception.
 // Should work for most exceptions except stack overflows.
-static LONG WINAPI ErrUEF(LPEXCEPTION_POINTERS ep)
+static LONG WINAPI ErrUEF(EXCEPTION_POINTERS *ep)
 {
     DWORD i;
 

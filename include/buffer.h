@@ -1,36 +1,36 @@
 #pragma once
+#include <windows.h>
 #include <stdlib.h>
 
 // Circular memory queue implementation.
-// All int-returning functions return 0 on success, <0 on failure.
 
-struct _buffer;
-typedef struct _buffer buffer_t;
+struct _CMQ_BUFFER;
+typedef struct _CMQ_BUFFER CMQ_BUFFER;
 
 // Underflow mode for read operations.
-typedef enum
+typedef enum _CMQ_UNDERFLOW_MODE
 {
-    BUFFER_ALLOW_UNDERFLOW = 1,
-    BUFFER_NO_UNDERFLOW
-} BUFFER_UNDERFLOW_MODE;
+    CMQ_ALLOW_UNDERFLOW = 1,
+    CMQ_NO_UNDERFLOW
+} CMQ_UNDERFLOW_MODE;
 
 // allocate memory and initialize, return 0 = failure
-buffer_t *buffer_create(size_t buffer_size);
+CMQ_BUFFER *CmqCreate(IN UINT64 bufferSize);
 
 // free memory and deinitialize
-int buffer_destroy(buffer_t *buffer);
+void CmqDestroy(IN CMQ_BUFFER *buffer);
 
-// "push" data to the buffer
-int buffer_add_data(buffer_t *buffer, void *data, size_t data_size);
+// "push" data to the queue
+BOOL CmqAddData(IN CMQ_BUFFER *buffer, IN const void *data, UINT64 dataSize);
 
-// "pop" data from the buffer, size=0: get all data (make sure you have the space for it)
-int buffer_get_data(buffer_t *buffer, void *data, size_t *data_size, BUFFER_UNDERFLOW_MODE underflow_mode);
+// "pop" data from the queue, dataSize=0: get all data (make sure you have the space for it)
+BOOL CmqGetData(IN CMQ_BUFFER *buffer, OUT void *data, IN OUT UINT64 *dataSize, CMQ_UNDERFLOW_MODE underflowMode);
 
 // returns bytes used by data
-size_t buffer_used_size(buffer_t *buffer);
+UINT64 CmqGetUsedSize(IN const CMQ_BUFFER *buffer);
 
 // returns free space
-size_t buffer_free_size(buffer_t *buffer);
+UINT64 CmqGetFreeSize(IN const CMQ_BUFFER *buffer);
 
 // zero-fill buffer, rewind internal pointer
-int buffer_clear(buffer_t *buffer);
+void CmqClear(IN CMQ_BUFFER *buffer);

@@ -1,40 +1,41 @@
 #include "buffer.h"
 #include "log.h"
 
-struct _buffer
+// internal data structure
+struct _CMQ_BUFFER
 {
-    size_t size;       // buffer size
-    char  *start;      // start of storage memory
-    char  *data_start; // pointer to the first byte of data. null = buffer empty
-    char  *data_end;   // pointer to the first free byte. null = buffer full
+    UINT64 Size;      // buffer size
+    BYTE *BufferStart;      // start of storage memory
+    BYTE *DataStart; // pointer to the first byte of data. null = buffer empty
+    BYTE *DataEnd;   // pointer to the first free byte. null = buffer full
 };
 
 // allocate memory and set variables
-buffer_t *buffer_create(size_t buffer_size)
+CMQ_BUFFER *CmqCreate(IN UINT64 bufferSize)
 {
-    buffer_t *buffer = NULL;
-    LogDebug("buffer_create: %d bytes\n", buffer_size);
+    CMQ_BUFFER *buffer = NULL;
+    LogDebug("size: %lu bytes", bufferSize);
 
-    if (buffer_size == 0)
+    if (bufferSize == 0)
     {
-        LogWarning("buffer_create: size == 0\n");
+        LogWarning("size == 0");
         return NULL;
     }
 
-    buffer = (buffer_t*) malloc(sizeof(buffer_t));
+    buffer = (CMQ_BUFFER *) malloc(sizeof(CMQ_BUFFER));
     if (!buffer)
     {
-        LogWarning("buffer_create: out of memory\n");
+        LogWarning("out of memory");
         return NULL;
     }
 
-    buffer->size = buffer_size;
-    buffer->start = (char*) malloc(buffer->size);
-    buffer->data_start = buffer->data_end = 0;
-    if (buffer->start == 0)
+    buffer->Size = bufferSize;
+    buffer->BufferStart = (BYTE *) malloc(buffer->Size);
+    buffer->DataStart = buffer->DataEnd = 0;
+    if (buffer->BufferStart == 0)
     {
         free(buffer);
-        LogWarning("buffer_create: no memory\n");
+        LogWarning("no memory");
         return NULL;
     }
 
@@ -42,178 +43,176 @@ buffer_t *buffer_create(size_t buffer_size)
 }
 
 // free memory and deinitialize
-int buffer_destroy(buffer_t *buffer)
+void CmqDestroy(IN CMQ_BUFFER *buffer)
 {
-    LogDebug("buffer_destroy(0x%0x)\n", buffer);
+    LogDebug("%p", buffer);
 
-    free(buffer->start);
+    free(buffer->BufferStart);
     free(buffer);
-
-    return 0;
 }
 
 // zero-fill buffer, rewind internal pointer
-int buffer_clear(buffer_t *buffer)
+void CmqClear(CMQ_BUFFER *buffer)
 {
-    LogDebug("buffer_clear(0x%x)\n", buffer);
+    LogDebug("%p", buffer);
 
-    buffer->data_start = buffer->data_end = 0;
-    memset(buffer->start, 0, buffer->size);
-
-    return 0;
+    buffer->DataStart = buffer->DataEnd = 0;
+    ZeroMemory(buffer->BufferStart, buffer->Size);
 }
 
 // queue data to the buffer
-int buffer_add_data(buffer_t *buffer, void *pdata, size_t data_size)
+BOOL CmqAddData(IN CMQ_BUFFER *buffer, IN const void *inputData, IN UINT64 inputDataSize)
 {
-    char *data = (char*) pdata;
-    size_t free_size, free_at_end;
+    BYTE *data = (BYTE *) inputData;
+    UINT64 freeSize, freeAtEnd;
 
-    LogVerbose("buffer_add_data(0x%x, 0x%x, %d)\n", buffer, data, data_size);
+    LogVerbose("(%p, %p, %lu)", buffer, data, inputDataSize);
 
-    if (buffer->data_end == 0 && buffer->data_start != 0)  // buffer full
+    if (buffer->DataEnd == NULL && buffer->DataStart != NULL)  // buffer full
     {
-        LogWarning("buffer_add_data(0x%x, 0x%x, %d): buffer full\n", buffer, data, data_size);
-        return -1;
+        LogWarning("(%p, %p, %lu): buffer full", buffer, data, inputDataSize);
+        return FALSE;
     }
 
-    if (data_size == 0)
-        return 0;
+    if (inputDataSize == 0)
+        return TRUE;
 
-    if (buffer->data_start == 0) // empty, initialize pointers
+    if (buffer->DataStart == NULL) // empty, initialize pointers
     {
-        buffer->data_start = buffer->data_end = buffer->start;
+        buffer->DataStart = buffer->DataEnd = buffer->BufferStart;
     }
 
-    free_size = buffer_free_size(buffer);
+    freeSize = CmqGetFreeSize(buffer);
     //  =       <       <       <!      >
     // [.....] [oo...] [.oo..] [...oo] [o...o]
-    if (data_size > free_size)
+    if (inputDataSize > freeSize)
     {
-        LogWarning("buffer_add_data(0x%x, 0x%x, %d): buffer too small (free: %d)\n", buffer, data, data_size, free_size);
-        return -1;
+        LogWarning("(%p, %p, %lu): buffer too small (free: %lu)", buffer, data, inputDataSize, freeSize);
+        return FALSE;
     }
 
-    if (buffer->data_start > buffer->start && buffer->data_end < buffer->start + buffer->size) // [.oo..]
+    if (buffer->DataStart > buffer->BufferStart && buffer->DataEnd < buffer->BufferStart + buffer->Size) // [.oo..]
     {
-        free_at_end = (buffer->start + buffer->size - buffer->data_end);
-        if (data_size <= free_at_end)
-            memcpy(buffer->data_end, data, data_size);
+        freeAtEnd = (buffer->BufferStart + buffer->Size - buffer->DataEnd);
+        if (inputDataSize <= freeAtEnd)
+        {
+            memcpy(buffer->DataEnd, data, inputDataSize);
+        }
         else
         {
-            memcpy(buffer->data_end, data, data_size - free_at_end);
-            memcpy(buffer->start, (data + data_size - free_at_end), free_at_end);
+            memcpy(buffer->DataEnd, data, inputDataSize - freeAtEnd);
+            memcpy(buffer->BufferStart, (data + inputDataSize - freeAtEnd), freeAtEnd);
         }
     }
     else
     {
-        if (buffer->data_end == buffer->start + buffer->size) // end at the limit, wrap to 0
-            buffer->data_end = buffer->start;
+        if (buffer->DataEnd == buffer->BufferStart + buffer->Size) // end at the limit, wrap to 0
+            buffer->DataEnd = buffer->BufferStart;
         // now we have one consecutive block of free memory so just copy
-        memcpy(buffer->data_end, data, data_size);
+        memcpy(buffer->DataEnd, data, inputDataSize);
     }
 
-    buffer->data_end += data_size;
-    if (buffer->data_end > buffer->start + buffer->size) // wrap only if end > limit, if end==limit pointer stays at the end
-        buffer->data_end -= buffer->size;
+    buffer->DataEnd += inputDataSize;
+    if (buffer->DataEnd > buffer->BufferStart + buffer->Size) // wrap only if end > limit, if end==limit pointer stays at the end
+        buffer->DataEnd -= buffer->Size;
 
-    if (free_size - data_size == 0) // buffer full
-        buffer->data_end = 0;
+    if (freeSize - inputDataSize == 0) // buffer full
+        buffer->DataEnd = NULL;
 
-    return 0;
+    return TRUE;
 }
 
 // "pop" data from the buffer
 // underflow = true: don't treat underflow as errors (reading empty buffer is ok etc)
-// data_size = 0: read all (use carefully in case of buffer overruns)
-int buffer_get_data(buffer_t *buffer, void *pdata, size_t *data_size, BUFFER_UNDERFLOW_MODE underflow_mode)
+// dataSize = 0: read all (use carefully in case of buffer overruns)
+BOOL CmqGetData(IN CMQ_BUFFER *buffer, OUT void *outputData, IN OUT UINT64 *dataSize, CMQ_UNDERFLOW_MODE underflowMode)
 {
-    char *data = (char*) pdata;
-    size_t used_size, used_at_end;
+    BYTE *data = (BYTE *) outputData;
+    UINT64 usedSize, usedAtEnd;
 
-    LogVerbose("buffer_get_data(0x%x, 0x%x, 0x%x, %d)\n", buffer, data, data_size, underflow_mode);
-    if (buffer->data_start == 0)  // buffer empty
+    LogVerbose("(%p, %p, %lu, %d)", buffer, data, dataSize, underflowMode);
+    if (buffer->DataStart == NULL)  // buffer empty
     {
-        *data_size = 0;
-        if ((underflow_mode == BUFFER_ALLOW_UNDERFLOW) || (*data_size == 0))
-            return 0;
+        *dataSize = 0;
+        if ((underflowMode == CMQ_ALLOW_UNDERFLOW) || (*dataSize == 0))
+            return TRUE;
         else
         {
-            LogWarning("buffer_get_data: buffer empty\n");
-            return -1;
+            LogWarning("buffer empty");
+            return FALSE;
         }
     }
 
-    used_size = buffer_used_size(buffer);
+    usedSize = CmqGetUsedSize(buffer);
 
-    if (used_size == buffer->size) // buffer full, only _pDataStart is valid
-        buffer->data_end = buffer->data_start;
+    if (usedSize == buffer->Size) // buffer full, only dataStart is valid
+        buffer->DataEnd = buffer->DataStart;
 
     //  full    <       >       <       <
     // [ooooo] [..ooo] [o..oo] [ooo..] [.ooo.]
 
-    if (*data_size == 0)   // "read all"
-        *data_size = used_size;
+    if (*dataSize == 0)   // "read all"
+        *dataSize = usedSize;
     else
     {
-        if (*data_size > used_size) // underflow
+        if (*dataSize > usedSize) // underflow
         {
-            if (underflow_mode == BUFFER_ALLOW_UNDERFLOW)
-                *data_size = used_size;
+            if (underflowMode == CMQ_ALLOW_UNDERFLOW)
+                *dataSize = usedSize;
             else
             {
-                *data_size = 0;
-                LogWarning("buffer_get_data: underflow (requested %d, got %d)\n", *data_size, used_size);
-                return -1;
+                LogWarning("underflow (requested %lu, got %lu)", *dataSize, usedSize);
+                *dataSize = 0;
+                return FALSE;
             }
         }
     }
 
-    if (buffer->data_start >= buffer->data_end) // [o..oo] should be safe for full buffer too (_pDataEnd == _pDataStart)
+    if (buffer->DataStart >= buffer->DataEnd) // [o..oo] should be safe for full buffer too (_pDataEnd == _pDataStart)
     {
-        used_at_end = (buffer->start + buffer->size - buffer->data_start);
-        if (*data_size <= used_at_end)
-            memcpy(data, buffer->data_start, *data_size);
+        usedAtEnd = (buffer->BufferStart + buffer->Size - buffer->DataStart);
+        if (*dataSize <= usedAtEnd)
+            memcpy(data, buffer->DataStart, *dataSize);
         else
         {
-            memcpy(data, buffer->data_start, used_at_end);
-            memcpy((data + used_at_end), buffer->start, *data_size - used_at_end);
+            memcpy(data, buffer->DataStart, usedAtEnd);
+            memcpy((data + usedAtEnd), buffer->BufferStart, *dataSize - usedAtEnd);
         }
     }
     else
     {
         // now we have one consecutive block of data memory so just copy
-        memcpy(data, buffer->data_start, *data_size);
+        memcpy(data, buffer->DataStart, *dataSize);
     }
 
-    buffer->data_start += *data_size;
-    if (buffer->data_start >= buffer->start + buffer->size)
-        buffer->data_start -= buffer->size;
+    buffer->DataStart += *dataSize;
+    if (buffer->DataStart >= buffer->BufferStart + buffer->Size)
+        buffer->DataStart -= buffer->Size;
 
-    if (used_size - *data_size == 0) // buffer empty
+    if (usedSize - *dataSize == 0) // buffer empty
     {
-        buffer->data_start = 0;
+        buffer->DataStart = NULL;
     }
 
-    return 0;
+    return TRUE;
 }
 
 // get used data size
-size_t buffer_used_size(buffer_t *buffer)
+UINT64 CmqGetUsedSize(IN const CMQ_BUFFER *buffer)
 {
-    if (buffer->size == 0 || buffer->start == 0 || buffer->data_start == 0)
+    if (buffer->Size == 0 || buffer->BufferStart == NULL || buffer->DataStart == NULL)
         return 0;
 
-    if (buffer->data_end == 0)  // full
-        return buffer->size;
+    if (buffer->DataEnd == NULL)  // full
+        return buffer->Size;
 
-    if (buffer->data_start < buffer->data_end) // data in one consecutive block
-        return (buffer->data_end - buffer->data_start);
+    if (buffer->DataStart < buffer->DataEnd) // data in one consecutive block
+        return (buffer->DataEnd - buffer->DataStart);
     else
-        return (buffer->data_end + buffer->size - buffer->data_start);
+        return (buffer->DataEnd + buffer->Size - buffer->DataStart);
 }
 
-size_t buffer_free_size(buffer_t *buffer)
+UINT64 CmqGetFreeSize(IN const CMQ_BUFFER *buffer)
 {
-    return buffer->size - buffer_used_size(buffer);
+    return buffer->Size - CmqGetUsedSize(buffer);
 }
