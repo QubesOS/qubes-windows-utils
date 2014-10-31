@@ -7,6 +7,6 @@
 //  COMMENTS:
 //
 ///////////////////////////////////////////////////////////////////////////////
-#include <tchar.h>
+#include <windows.h>
 // function prototypes
-TCHAR GetOption(int argc, TCHAR** argv, TCHAR* pszValidOpts, TCHAR** ppszParam);
+WCHAR GetOption(int argc, WCHAR** argv, WCHAR* pszValidOpts, WCHAR** ppszParam);

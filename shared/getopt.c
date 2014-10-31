@@ -48,42 +48,42 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-TCHAR GetOption(
+WCHAR GetOption(
     int argc,
-    TCHAR** argv,
-    TCHAR* pszValidOpts,
-    TCHAR** ppszParam)
+    WCHAR** argv,
+    WCHAR* pszValidOpts,
+    WCHAR** ppszParam)
 {
     static int iArg = 1;
-    TCHAR chOpt;
-    TCHAR* psz = NULL;
-    TCHAR* pszParam = NULL;
+    WCHAR chOpt;
+    WCHAR* psz = NULL;
+    WCHAR* pszParam = NULL;
 
     if (iArg < argc)
     {
         psz = &(argv[iArg][0]);
-        if (*psz == _T('-') || *psz == _T('/'))
+        if (*psz == L'-' || *psz == L'/')
         {
             // we have an option specifier
             chOpt = argv[iArg][1];
-            if (_istalnum(chOpt) || _istpunct(chOpt))
+            if (iswalnum(chOpt) || iswpunct(chOpt))
             {
                 // we have an option character
-                psz = _tcschr(pszValidOpts, chOpt);
+                psz = wcschr(pszValidOpts, chOpt);
                 if (psz != NULL)
                 {
                     // option is valid, we want to return chOpt
-                    if (psz[1] == _T(':'))
+                    if (psz[1] == L':')
                     {
                         // option can have a parameter
                         psz = &(argv[iArg][2]);
-                        if (*psz == _T('\0'))
+                        if (*psz == L'\0')
                         {
                             // must look at next argv for param
                             if (iArg + 1 < argc)
                             {
                                 psz = &(argv[iArg + 1][0]);
-                                if (*psz == _T('-') || *psz == _T('/'))
+                                if (*psz == L'-' || *psz == L'/')
                                 {
                                     // next argv is a new option, so param
                                     // not given for current option
