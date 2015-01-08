@@ -1,23 +1,27 @@
-# TODO: this will need to compile with both gcc and wdk in odyssey...
-# Or make it source-only? A DLL? Build only the qvideo driver with wdk?
+TARGETNAME = windows-utils
+TARGETTYPE = DYNLINK
+TARGETPATH = bin
 
-TARGETNAME=windows-utils
-TARGETTYPE=LIBRARY
-TARGETPATH=libs
+DLLDEF = windows-utils.def
+DLLENTRY = DllMain
 
-USE_MSVCRT=1
+USE_MSVCRT = 1
 
 C_DEFINES = $(C_DEFINES) /D_UNICODE /DUNICODE
 
-INCLUDES=$(INCLUDES); \
+INCLUDES = $(INCLUDES); \
     ..\include; \
     $(QUBES_INCLUDES); \
     $(SDK_INC_PATH)\..\ddk;
 
-SOURCES=buffer.c config.c error.c exec.c getopt.c log.c utf8-conv.c
+SOURCES = buffer.c config.c error.c exec.c getopt.c log.c main.c utf8-conv.c
 
-TARGETLIBS=\
+TARGETLIBS = \
     $(SDK_LIB_PATH)\kernel32.lib \
     $(SDK_LIB_PATH)\user32.lib \
+    $(SDK_LIB_PATH)\advapi32.lib \
+    $(SDK_LIB_PATH)\psapi.lib \
+    $(SDK_LIB_PATH)\userenv.lib \
+    $(SDK_LIB_PATH)\version.lib \
     $(SDK_LIB_PATH)\shlwapi.lib \
     $(SDK_LIB_PATH)\wtsapi32.lib

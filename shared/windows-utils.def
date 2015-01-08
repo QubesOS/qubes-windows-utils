@@ -1,0 +1,42 @@
+LIBRARY windows-utils
+
+EXPORTS
+	CmqCreate
+	CmqDestroy
+	CmqAddData
+	CmqGetData
+	CmqGetUsedSize
+	CmqGetFreeSize
+	CmqClear
+
+	CfgGetModuleName
+	CfgReadString
+	CfgReadDword
+	CfgReadQword
+	CfgWriteDword
+	CfgEnsureKeyExists
+
+	GrantDesktopAccess
+	GrantRemoteSessionDesktopAccess
+	CreatePipedProcessAsCurrentUser
+	CreatePipedProcessAsUser
+	CreateNormalProcessAsCurrentUser
+	CreateNormalProcessAsUser
+
+	ErrRegisterUEF
+
+	GetOption
+
+	LogInit
+	LogInitDefault
+	LogStart
+	LogSetLevel
+	LogGetLevel
+	LogFlush
+	_LogFormat
+	_perror
+	_perror2
+	_hex_dump
+
+	ConvertUTF8ToUTF16
+	ConvertUTF16ToUTF8
