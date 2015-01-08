@@ -14,7 +14,7 @@ INCLUDES = $(INCLUDES); \
     $(QUBES_INCLUDES); \
     $(SDK_INC_PATH)\..\ddk;
 
-SOURCES = buffer.c config.c error.c exec.c getopt.c log.c main.c utf8-conv.c
+SOURCES = buffer.c config.c error.c exec.c getopt.c log.c main.c utf8-conv.c version.rc
 
 TARGETLIBS = \
     $(SDK_LIB_PATH)\kernel32.lib \
