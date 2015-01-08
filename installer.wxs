@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+  <?if $(env._BUILDARCH) = x86 ?>
+    <?define ARCHDIR = i386 ?>
+  <?elseif $(env._BUILDARCH) = AMD64 ?>
+    <?define ARCHDIR = amd64 ?>
+  <?endif ?>
+
+  <Module
+    Id='windowsUtils'
+    Language='1033'
+    Codepage='1252'
+    Version='$(env.VERSION)'
+  >
+
+    <Package
+      Id='{7E495EE5-8003-4B9A-9D45-04C514ED57FA}'
+      Keywords='Installer'
+      Description="Qubes shared library"
+      Comments='no comment'
+      Manufacturer='Invisible Things Lab'
+      InstallScope='perMachine'
+      InstallerVersion='200'
+      Languages='1033'
+      SummaryCodepage='1252'
+      InstallPrivileges="elevated"
+    />
+
+    <Directory Id='TARGETDIR' Name='SourceDir'>
+      <Directory Id='System64Folder'>
+        <Component Id='utilsDll' Guid='B701294F-7A5E-48C8-B1D4-74968E4479D7'>
+          <File Id='windows_utils.dll' Name='windows-utils.dll' DiskId='1' Source='shared\bin\$(var.ARCHDIR)\windows-utils.dll' KeyPath="no" />
+        </Component>
+      </Directory>
+    </Directory>
+
+  </Module>
+</Wix>
