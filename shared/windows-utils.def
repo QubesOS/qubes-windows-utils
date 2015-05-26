@@ -1,42 +1,47 @@
 LIBRARY windows-utils
 
 EXPORTS
-	CmqCreate
-	CmqDestroy
-	CmqAddData
-	CmqGetData
-	CmqGetUsedSize
-	CmqGetFreeSize
-	CmqClear
+    CmqCreate
+    CmqDestroy
+    CmqAddData
+    CmqGetData
+    CmqGetUsedSize
+    CmqGetFreeSize
+    CmqClear
 
-	CfgGetModuleName
-	CfgReadString
-	CfgReadDword
-	CfgReadQword
-	CfgWriteDword
-	CfgEnsureKeyExists
+    CfgGetModuleName
+    CfgReadString
+    CfgReadDword
+    CfgReadQword
+    CfgWriteDword
+    CfgEnsureKeyExists
 
-	GrantDesktopAccess
-	GrantRemoteSessionDesktopAccess
-	CreatePipedProcessAsCurrentUser
-	CreatePipedProcessAsUser
-	CreateNormalProcessAsCurrentUser
-	CreateNormalProcessAsUser
+    GrantDesktopAccess
+    GrantRemoteSessionDesktopAccess
+    CreatePipedProcessAsCurrentUser
+    CreatePipedProcessAsUser
+    CreateNormalProcessAsCurrentUser
+    CreateNormalProcessAsUser
 
-	ErrRegisterUEF
+    ErrRegisterUEF
 
-	GetOption
+    GetOption
 
-	LogInit
-	LogInitDefault
-	LogStart
-	LogSetLevel
-	LogGetLevel
-	LogFlush
-	_LogFormat
-	_perror
-	_perror2
-	_hex_dump
+    LogInit
+    LogInitDefault
+    LogStart
+    LogSetLevel
+    LogGetLevel
+    LogFlush
+    _LogFormat
+    _perror
+    _perror2
+    _hex_dump
 
-	ConvertUTF8ToUTF16
-	ConvertUTF16ToUTF8
+    ConvertUTF8ToUTF16
+    ConvertUTF16ToUTF8
+
+    VchanGetReadBufferSize
+    VchanGetWriteBufferSize
+    VchanSendBuffer
+    VchanReceiveBuffer

@@ -12,9 +12,9 @@ C_DEFINES = $(C_DEFINES) /D_UNICODE /DUNICODE
 INCLUDES = $(INCLUDES); \
     ..\include; \
     $(QUBES_INCLUDES); \
-    $(SDK_INC_PATH)\..\ddk;
+    $(SDK_INC_PATH)\..\ddk; \
 
-SOURCES = buffer.c config.c error.c exec.c getopt.c log.c main.c utf8-conv.c version.rc
+SOURCES = buffer.c config.c error.c exec.c getopt.c log.c main.c utf8-conv.c vchan-common.c version.rc
 
 TARGETLIBS = \
     $(SDK_LIB_PATH)\kernel32.lib \
@@ -24,4 +24,5 @@ TARGETLIBS = \
     $(SDK_LIB_PATH)\userenv.lib \
     $(SDK_LIB_PATH)\version.lib \
     $(SDK_LIB_PATH)\shlwapi.lib \
-    $(SDK_LIB_PATH)\wtsapi32.lib
+    $(SDK_LIB_PATH)\wtsapi32.lib \
+    $(QUBES_LIBS)\libvchan.lib \
