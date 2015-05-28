@@ -1,6 +1,16 @@
 #pragma once
 #include <windows.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef WINDOWSUTILS_EXPORTS
+#    define WINDOWSUTILS_API __declspec(dllexport)
+#else
+#    define WINDOWSUTILS_API __declspec(dllimport)
+#endif
+
 // To override CRT's perror definition.
 #define _CRT_PERROR_DEFINED
 
@@ -42,21 +52,27 @@ enum
 
 // Use the log directory and log level from registry config.
 // If logName is NULL, use current executable as name.
+WINDOWSUTILS_API
 DWORD LogInitDefault(IN const WCHAR *logName OPTIONAL);
 
 // Formats unique log file path and calls LogStart.
 // If logDir is NULL, use default log location.
+WINDOWSUTILS_API
 void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName);
 
 // If logfilePath is NULL, use stderr.
+WINDOWSUTILS_API
 void LogStart(IN const WCHAR *logfilePath OPTIONAL);
 
 // Explicitly set verbosity level.
+WINDOWSUTILS_API
 void LogSetLevel(IN int level);
 
 // Get current verbosity level.
+WINDOWSUTILS_API
 int LogGetLevel(void);
 
+WINDOWSUTILS_API
 void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const WCHAR *format, ...);
 // *_raw functions omit the timestamp, function name prefix and don't append newlines automatically.
 
@@ -81,14 +97,17 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 #define LogErrorRaw(format, ...)    _LogFormat(LOG_LEVEL_ERROR,    TRUE,         NULL, L##format, ##__VA_ARGS__)
 
 // Returns last error code.
+WINDOWSUTILS_API
 DWORD _perror(IN const char *functionName, IN const WCHAR *prefix);
 #define perror(prefix) _perror(__FUNCTION__, L##prefix)
 
+WINDOWSUTILS_API
 DWORD _perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix);
 #define perror2(error, prefix) _perror2(__FUNCTION__, error, L##prefix)
 
 // hex_dump only logs if DEBUG is defined.
 // You can define LOG_NO_HEX_DUMP to disable it even in DEBUG build (it can generate massive log files).
+WINDOWSUTILS_API
 void _hex_dump(IN const WCHAR *desc, IN const void *addr, IN int len);
 #if (defined(DEBUG) || defined(_DEBUG)) && !defined(LOG_NO_HEX_DUMP)
 #define hex_dump(desc, addr, len) _hex_dump(L##desc, addr, len)
@@ -97,4 +116,9 @@ void _hex_dump(IN const WCHAR *desc, IN const void *addr, IN int len);
 #endif
 
 // Flush pending data to the log file.
+WINDOWSUTILS_API
 void LogFlush(void);
+
+#ifdef __cplusplus
+}
+#endif
