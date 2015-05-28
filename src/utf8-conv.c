@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <strsafe.h>
 
+#include "utf8-conv.h"
+
 DWORD ConvertUTF8ToUTF16(IN const char *inputUtf8, OUT WCHAR **outputUtf16, OUT size_t *cchOutput OPTIONAL)
 {
     int result;
