@@ -345,7 +345,10 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
 
+#ifndef _DEBUG
+    // crash with full force on debug builds
     ErrRegisterUEF();
+#endif
 
     // If we're initializing ad-hoc on a first log call, first read the log level
     // so we can tell if the log file should be created now.
