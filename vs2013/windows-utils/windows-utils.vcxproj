@@ -153,6 +153,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\src\buffer.c" />
     <ClCompile Include="..\..\src\config.c" />
+    <ClCompile Include="..\..\src\crc32.c" />
     <ClCompile Include="..\..\src\dllmain.c" />
     <ClCompile Include="..\..\src\error.c" />
     <ClCompile Include="..\..\src\exec.c" />
@@ -168,6 +169,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\include\buffer.h" />
     <ClInclude Include="..\..\include\config.h" />
+    <ClInclude Include="..\..\include\crc32.h" />
     <ClInclude Include="..\..\include\error.h" />
     <ClInclude Include="..\..\include\exec.h" />
     <ClInclude Include="..\..\include\getopt.h" />
