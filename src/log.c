@@ -14,7 +14,7 @@ static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
 static WCHAR g_LogName[CFG_MODULE_MAX] = { 0 };
 static int g_LogLevel = -1; // uninitialized
 
-#define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(TCHAR))
+#define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(WCHAR))
 
 #if (UNLEN > LOG_MAX_MESSAGE_LENGTH)
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
@@ -361,7 +361,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
 
-    buffer = (TCHAR*) malloc(BUFFER_SIZE);
+    buffer = (WCHAR*) malloc(BUFFER_SIZE);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")

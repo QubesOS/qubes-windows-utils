@@ -27,7 +27,7 @@ extern "C" {
 // Registry config value: Log retention time (seconds).
 #define LOG_CONFIG_RETENTION_VALUE L"LogRetention"
 
-// Size of internal buffer in TCHARs.
+// Size of internal buffer in WCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
 
 // Logs older than this (seconds) will be deleted (default value - 7 days).
