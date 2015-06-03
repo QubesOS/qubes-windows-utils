@@ -7,6 +7,7 @@
     <LibraryPath>$(QUBES_LIBS);$(SolutionDir)\$(Configuration)\$(Platform);$(LibraryPath)</LibraryPath>
     <OutDir>..\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>..\$(ProjectName)\$(ConfigurationName)\$(Platform)\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <Link>
