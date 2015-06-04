@@ -377,7 +377,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
     va_start(args, format);
 
-    ZeroMemory(buffer, bufferSize);
+    ZeroMemory(buffer, BUFFER_SIZE);
     // format buffer
     bufferSize = vswprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(WCHAR);
     va_end(args);
