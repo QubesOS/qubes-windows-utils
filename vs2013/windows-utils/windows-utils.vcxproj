@@ -163,6 +163,7 @@
     <ClCompile Include="..\..\src\exec.c" />
     <ClCompile Include="..\..\src\getopt.c" />
     <ClCompile Include="..\..\src\log.c" />
+    <ClCompile Include="..\..\src\pipe-server.c" />
     <ClCompile Include="..\..\src\qubes-io.c" />
     <ClCompile Include="..\..\src\utf8-conv.c" />
     <ClCompile Include="..\..\src\vchan-common.c" />
@@ -178,6 +179,7 @@
     <ClInclude Include="..\..\include\exec.h" />
     <ClInclude Include="..\..\include\getopt.h" />
     <ClInclude Include="..\..\include\log.h" />
+    <ClInclude Include="..\..\include\pipe-server.h" />
     <ClInclude Include="..\..\include\qrexec.h" />
     <ClInclude Include="..\..\include\qubes-io.h" />
     <ClInclude Include="..\..\include\utf8-conv.h" />
