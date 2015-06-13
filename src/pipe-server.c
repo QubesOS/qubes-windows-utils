@@ -8,17 +8,28 @@
 
 #include "pipe-server.h"
 
+typedef struct _PIPE_CLIENT
+{
+    HANDLE WritePipe;
+    HANDLE ReadPipe;
+    CMQ_BUFFER *ReadBuffer;
+    CMQ_BUFFER *WriteBuffer;
+    BOOL Disconnecting;
+    CRITICAL_SECTION Lock;
+    HANDLE ReaderThread;
+    HANDLE WriterThread;
+} PIPE_CLIENT, *PPIPE_CLIENT;
+
 typedef struct _PIPE_SERVER
 {
     WCHAR PipeName[256];
     DWORD PipeBufferSize;
-    DWORD ReadBufferSize;
+    DWORD InternalBufferSize;
+    DWORD WriteTimeout;
     PSECURITY_ATTRIBUTES SecurityAttributes;
     DWORD NumberClients;
-    HANDLE WritePipes[PS_MAX_CLIENTS];
-    HANDLE ReadPipes[PS_MAX_CLIENTS];
+    PIPE_CLIENT Clients[PS_MAX_CLIENTS];
     CRITICAL_SECTION Lock;
-    CMQ_BUFFER *Buffers[PS_MAX_CLIENTS];
 
     PVOID UserContext;
 
@@ -32,8 +43,6 @@ struct THREAD_PARAM
 {
     DWORD ClientIndex;
     PIPE_SERVER Server;
-    PVOID Data;
-    DWORD DataSize;
 };
 
 // Initialize data for a newly connected client.
@@ -43,11 +52,21 @@ DWORD QpsConnectClient(
     IN  HANDLE ReadPipe
     );
 
+// Disconnect can be called from inside worker threads, we don't want to
+// wait for them in that case.
+void QpsDisconnectClientInternal(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientIndex,
+    IN  BOOL WriterExiting,
+    IN  BOOL ReaderExiting
+    );
+
 // Create the server.
 DWORD QpsCreate(
     IN  PWCHAR PipeName, // This is a client->server pipe name (clients write, server reads). server->client pipes have "-%PID%" appended.
     IN  DWORD PipeBufferSize, // Pipe read/write buffer size. Shouldn't be too big.
-    IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by QpsRead().
+    IN  DWORD InternalBufferSize, // Internal read/write buffer (per client).
+    IN  DWORD WriteTimeout, // If a client doesn't read written data in this amount of milliseconds, it's disconnected.
     IN  QPS_CLIENT_CONNECTED ConnectCallback, // "Client connected" callback.
     IN  QPS_CLIENT_DISCONNECTED DisconnectCallback OPTIONAL, // "Client disconnected" callback.
     IN  QPS_DATA_RECEIVED ReadCallback OPTIONAL, // "Data received" callback.
@@ -66,7 +85,8 @@ DWORD QpsCreate(
 
     StringCbCopyW((*Server)->PipeName, sizeof((*Server)->PipeName), PipeName);
     (*Server)->PipeBufferSize = PipeBufferSize;
-    (*Server)->ReadBufferSize = ReadBufferSize;
+    (*Server)->InternalBufferSize = InternalBufferSize;
+    (*Server)->WriteTimeout = WriteTimeout;
     (*Server)->SecurityAttributes = SecurityAttributes;
 
     (*Server)->ConnectCallback = ConnectCallback;
@@ -106,7 +126,7 @@ static DWORD QpsAllocateIndex(
 {
     for (DWORD i = 0; i < PS_MAX_CLIENTS; i++)
     {
-        if (Server->WritePipes[i] == NULL)
+        if (Server->Clients[i].WritePipe == NULL)
             return i;
     }
     return ~0;
@@ -128,13 +148,15 @@ static DWORD WINAPI QpsReaderThread(
     )
 {
     struct THREAD_PARAM *param = Param;
-    HANDLE pipe = param->Server->ReadPipes[param->ClientIndex];
+    PPIPE_CLIENT client = &(param->Server->Clients[param->ClientIndex]);
+    HANDLE pipe = client->ReadPipe;
     PVOID buffer = malloc(param->Server->PipeBufferSize);
     DWORD transferred;
 
     if (!buffer)
     {
-        QpsDisconnectClient(param->Server, param->ClientIndex);
+        LogError("no memory");
+        QpsDisconnectClientInternal(param->Server, param->ClientIndex, FALSE, TRUE);
         free(param);
         return 1;
     }
@@ -144,31 +166,45 @@ static DWORD WINAPI QpsReaderThread(
     while (TRUE)
     {
         LogVerbose("[%lu] reading...", param->ClientIndex);
-        if (!ReadFile(pipe, buffer, param->Server->PipeBufferSize, &transferred, NULL))
+        // reading will fail even if blocked when we call CancelIo() from QpsDisconnectClient
+        if (!ReadFile(pipe, buffer, param->Server->PipeBufferSize, &transferred, NULL)) // this can block
         {
-            LogWarning("[%lu] read failed: %d %x", param->ClientIndex, GetLastError(), GetLastError());
-            QpsDisconnectClient(param->Server, param->ClientIndex);
+            perror("ReadFile");
+            LogWarning("[%lu] read failed", param->ClientIndex);
+            // disconnect the client if the read failed because of other errors (broken pipe etc), it's harmless if we're already disconnecting
+            QpsDisconnectClientInternal(param->Server, param->ClientIndex, FALSE, TRUE);
             free(param);
             free(buffer);
             return 1;
         }
 
-        LogVerbose("[%lu] read %lu 0x%lx", param->ClientIndex, transferred, transferred);
-        if (param->Server->ReadCallback)
-            param->Server->ReadCallback(param->Server, param->ClientIndex, buffer, transferred, param->Server->UserContext);
+        // disconnect could happen after a successful read but before entering the client lock below
+        if (client->Disconnecting)
+        {
+            LogWarning("[%lu] client is disconnecting, exiting", param->ClientIndex);
+            free(param);
+            free(buffer);
+            return 1;
+        }
 
-        EnterCriticalSection(&param->Server->Lock);
-        if (!CmqAddData(param->Server->Buffers[param->ClientIndex], buffer, transferred))
+        // we have some data from the pipe, add it to the read buffer
+        EnterCriticalSection(&client->Lock);
+        LogVerbose("[%lu] read %lu 0x%lx", param->ClientIndex, transferred, transferred);
+
+        if (!CmqAddData(client->ReadBuffer, buffer, transferred))
         {
             // FIXME: block here until there's space
-            LeaveCriticalSection(&param->Server->Lock);
+            LeaveCriticalSection(&client->Lock);
             LogError("[%lu] read buffer full", param->ClientIndex);
-            QpsDisconnectClient(param->Server, param->ClientIndex);
+            QpsDisconnectClientInternal(param->Server, param->ClientIndex, FALSE, TRUE);
             free(param);
             free(buffer);
             return 1;
         }
-        LeaveCriticalSection(&param->Server->Lock);
+        LeaveCriticalSection(&client->Lock);
+
+        if (param->Server->ReadCallback)
+            param->Server->ReadCallback(param->Server, param->ClientIndex, buffer, transferred, param->Server->UserContext);
     }
 }
 
@@ -177,22 +213,65 @@ static DWORD WINAPI QpsWriterThread(
     )
 {
     struct THREAD_PARAM *param = Param;
-    HANDLE pipe = param->Server->WritePipes[param->ClientIndex];
+    PPIPE_CLIENT client = &(param->Server->Clients[param->ClientIndex]);
+    HANDLE pipe = client->WritePipe;
+    PVOID data = malloc(param->Server->InternalBufferSize);
+    UINT64 size;
 
-    LogVerbose("[%lu] writing %lu 0x%lx", param->ClientIndex, param->DataSize, param->DataSize);
-    EnterCriticalSection(&param->Server->Lock);
-    if (!QioWriteBuffer(pipe, param->Data, param->DataSize))
+    if (!data)
     {
-        LeaveCriticalSection(&param->Server->Lock);
-        LogWarning("[%lu] write failed", param->ClientIndex);
-        QpsDisconnectClient(param->Server, param->ClientIndex);
+        LogError("no memory");
+        QpsDisconnectClientInternal(param->Server, param->ClientIndex, TRUE, FALSE);
+        free(param);
+        return 1;
     }
-    else
-        LeaveCriticalSection(&param->Server->Lock);
 
-    free(param->Data);
-    free(param);
-    return 1;
+    // This thread endlessly tries to flush the client's write buffer to the client's write pipe.
+    while (TRUE)
+    {
+        // if the client is disconnecting, QpsWrite() calls will fail so no new data may be added to the write buffer
+        if (client->Disconnecting)
+        {
+            LogWarning("[%lu] client is disconnecting, exiting", param->ClientIndex);
+            free(param);
+            free(data);
+            return 1;
+        }
+
+        EnterCriticalSection(&client->Lock);
+        size = CmqGetUsedSize(client->WriteBuffer);
+        if (size > 0)
+        {
+            // there's data to write
+            if (!CmqGetData(client->WriteBuffer, data, &size, CMQ_NO_UNDERFLOW))
+            { // shouldn't happen
+                LeaveCriticalSection(&client->Lock);
+                LogError("CmqGetData(client->WriteBuffer) failed");
+                QpsDisconnectClientInternal(param->Server, param->ClientIndex, TRUE, FALSE);
+                free(param);
+                free(data);
+                return 1;
+            }
+            LeaveCriticalSection(&client->Lock);
+
+            LogVerbose("[%lu] writing %lu 0x%lx", param->ClientIndex, size, size);
+            // writing will fail even if blocked when we call CancelIo() from QpsDisconnectClient
+            if (!QioWriteBuffer(pipe, data, (DWORD)size)) // this can block
+            {
+                perror("QioWriteBuffer");
+                LogWarning("[%lu] write failed", param->ClientIndex);
+                QpsDisconnectClientInternal(param->Server, param->ClientIndex, TRUE, FALSE);
+                free(param);
+                free(data);
+                return 1;
+            }
+        }
+        else
+            LeaveCriticalSection(&client->Lock);
+
+        if (size == 0)
+            Sleep(1);
+    }
 }
 
 static DWORD QpsConnectClient(
@@ -202,20 +281,31 @@ static DWORD QpsConnectClient(
     )
 {
     DWORD index;
-    HANDLE thread;
     struct THREAD_PARAM *param;
+    PPIPE_CLIENT client;
 
     EnterCriticalSection(&Server->Lock);
     index = QpsAllocateIndex(Server);
+    client = &(Server->Clients[index]);
 
-    Server->Buffers[index] = CmqCreate(Server->ReadBufferSize);
-    if (Server->Buffers[index] == NULL)
+    client->ReadBuffer = CmqCreate(Server->InternalBufferSize);
+    if (client->ReadBuffer == NULL)
     {
         LeaveCriticalSection(&Server->Lock);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
-    Server->WritePipes[index] = WritePipe;
-    Server->ReadPipes[index] = ReadPipe;
+
+    client->WriteBuffer = CmqCreate(Server->InternalBufferSize);
+    if (client->WriteBuffer == NULL)
+    {
+        LeaveCriticalSection(&Server->Lock);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+
+    client->WritePipe = WritePipe;
+    client->ReadPipe = ReadPipe;
+    client->Disconnecting = FALSE;
+    InitializeCriticalSection(&client->Lock);
     Server->NumberClients++;
     LeaveCriticalSection(&Server->Lock);
 
@@ -225,11 +315,19 @@ static DWORD QpsConnectClient(
         return ERROR_NOT_ENOUGH_MEMORY;
     param->Server = Server;
     param->ClientIndex = index;
-    thread = CreateThread(NULL, 0, QpsReaderThread, param, 0, NULL);
-    if (!thread)
+    client->ReaderThread = CreateThread(NULL, 0, QpsReaderThread, param, 0, NULL);
+    if (!client->ReaderThread)
         return ERROR_NO_SYSTEM_RESOURCES;
 
-    CloseHandle(thread);
+    // start the writer thread
+    param = malloc(sizeof(struct THREAD_PARAM));
+    if (!param)
+        return ERROR_NOT_ENOUGH_MEMORY;
+    param->Server = Server;
+    param->ClientIndex = index;
+    client->WriterThread = CreateThread(NULL, 0, QpsWriterThread, param, 0, NULL);
+    if (!client->WriterThread)
+        return ERROR_NO_SYSTEM_RESOURCES;
 
     LogInfo("[%lu] connected", index);
     if (Server->ConnectCallback)
@@ -242,21 +340,78 @@ void QpsDisconnectClient(
     IN  DWORD ClientIndex
     )
 {
-    if (Server->WritePipes[ClientIndex] == NULL)
+    QpsDisconnectClientInternal(Server, ClientIndex, FALSE, FALSE);
+}
+
+static void QpsDisconnectClientInternal(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientIndex,
+    IN  BOOL WriterExiting,
+    IN  BOOL ReaderExiting
+    )
+{
+    PPIPE_CLIENT client = &(Server->Clients[ClientIndex]);
+
+    if (client->Disconnecting)
+        return;
+
+    if (client->WritePipe == NULL)
         return;
 
     LogInfo("[%lu] disconnecting", ClientIndex);
+
     EnterCriticalSection(&Server->Lock);
-    CancelIo(Server->WritePipes[ClientIndex]);
-    CancelIo(Server->ReadPipes[ClientIndex]);
-    // reader thread will terminate when the pipe's io is canceled/handle closed
-    CloseHandle(Server->WritePipes[ClientIndex]);
-    CloseHandle(Server->ReadPipes[ClientIndex]);
-    Server->WritePipes[ClientIndex] = NULL;
-    Server->ReadPipes[ClientIndex] = NULL;
-    CmqDestroy(Server->Buffers[ClientIndex]);
-    Server->Buffers[ClientIndex] = NULL;
+    client->Disconnecting = TRUE;
+
+    EnterCriticalSection(&client->Lock);
+
+    if (!WriterExiting)
+    {
+        // wait for the writer thread to exit
+        if (WaitForSingleObject(client->WriterThread, Server->WriteTimeout) != WAIT_OBJECT_0)
+        {
+            LogWarning("[%lu] writer thread didn't terminate in time, canceling write", ClientIndex);
+            if (!CancelIo(client->WritePipe)) // this will abort a blocking operation
+                perror("CancelIo(write)");
+        }
+
+        // wait for the writer thread cleanup
+        if (WaitForSingleObject(client->WriterThread, 100) != WAIT_OBJECT_0)
+        {
+            LogWarning("[%lu] writer thread didn't terminate in time, killing it", ClientIndex);
+            // this may leak memory or do other nasty things but should never happen
+            TerminateThread(client->WriterThread, 0);
+        }
+    }
+    CloseHandle(client->WriterThread);
+    CloseHandle(client->WritePipe);
+
+    if (!ReaderExiting)
+    {
+        // wait for the reader thread to exit
+        if (!CancelIo(client->ReadPipe)) // this will abort a blocking operation
+            perror("CancelIo(read)");
+
+        if (WaitForSingleObject(client->ReaderThread, 100) != WAIT_OBJECT_0)
+        {
+            LogWarning("[%lu] reader thread didn't terminate in time, killing it", ClientIndex);
+            // this may leak memory or do other nasty things but should never happen
+            TerminateThread(client->ReaderThread, 0);
+        }
+    }
+    CloseHandle(client->ReaderThread);
+    CloseHandle(client->ReadPipe);
+
+    // destroy rest of the client's data
+    CmqDestroy(client->ReadBuffer);
+    CmqDestroy(client->WriteBuffer);
+
+    LeaveCriticalSection(&client->Lock);
+    DeleteCriticalSection(&client->Lock);
+
+    ZeroMemory(client, sizeof(PIPE_CLIENT));
     Server->NumberClients--;
+
     LeaveCriticalSection(&Server->Lock);
 
     if (Server->DisconnectCallback)
@@ -339,24 +494,22 @@ DWORD QpsRead(
 {
     UINT64 size;
     BOOL ret;
+    PPIPE_CLIENT client = &(Server->Clients[ClientIndex]);
 
     // get data from the read buffer until the requested amount is read
     do
     {
-        // we need to check if the client is connected to access its buffer
-        // FIXME: this is atomic in practice but should be replaced with some connected flag and an interlocked check
-        EnterCriticalSection(&Server->Lock);
-        if (!Server->WritePipes[ClientIndex] || !Server->Buffers[ClientIndex])
+        if (!client->ReadPipe || client->Disconnecting)
         {
-            LeaveCriticalSection(&Server->Lock);
-            LogWarning("[%d] client is disconnected", ClientIndex);
+            LogWarning("[%lu] client is disconnected", ClientIndex);
             return ERROR_BROKEN_PIPE;
         }
 
         // get data from the read buffer if available
         size = DataSize;
-        ret = CmqGetData(Server->Buffers[ClientIndex], Data, &size, CMQ_NO_UNDERFLOW);
-        LeaveCriticalSection(&Server->Lock);
+        EnterCriticalSection(&client->Lock);
+        ret = CmqGetData(client->ReadBuffer, Data, &size, CMQ_NO_UNDERFLOW);
+        LeaveCriticalSection(&client->Lock);
         if (!ret)
             Sleep(1); // don't congest the lock
     } while (!ret);
@@ -371,39 +524,26 @@ DWORD QpsWrite(
     IN  DWORD DataSize
     )
 {
-    struct THREAD_PARAM *param;
-    HANDLE thread;
+    PPIPE_CLIENT client = &(Server->Clients[ClientIndex]);
+    BOOL ret;
 
-    if (!Server->WritePipes[ClientIndex])
-        return ERROR_NOT_CONNECTED;
-
-    // create a thread for writing in case it blocks
-    param = malloc(sizeof(struct THREAD_PARAM));
-    if (!param)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    param->Server = Server;
-    param->ClientIndex = ClientIndex;
-    // Ideally we wouldn't copy the data but this call is nonblocking.
-    // This way we don't require that the caller keeps this buffer valid
-    // for an indeterminate amount of time (no completion notification).
-    param->Data = malloc(DataSize);
-    if (!param->Data)
+    if (!client->WritePipe || client->Disconnecting)
     {
-        free(param);
-        return ERROR_NOT_ENOUGH_MEMORY;
+        LogWarning("[%lu] client is disconnected", ClientIndex);
+        return ERROR_BROKEN_PIPE;
     }
-    memcpy(param->Data, Data, DataSize);
-    param->DataSize = DataSize;
 
-    thread = CreateThread(NULL, 0, QpsWriterThread, param, 0, NULL);
-    if (!thread)
+    // add data to the write queue
+    // it will be flushed to the client pipe by the background writer thread
+    EnterCriticalSection(&client->Lock);
+    ret = CmqAddData(client->WriteBuffer, Data, DataSize);
+    LeaveCriticalSection(&client->Lock);
+
+    if (!ret)
     {
-        free(param->Data);
-        free(param);
-        return ERROR_NO_SYSTEM_RESOURCES;
+        LogError("[%lu] write buffer full", ClientIndex);
+        return ERROR_BUFFER_OVERFLOW;
     }
-    CloseHandle(thread);
 
     return ERROR_SUCCESS;
 }
@@ -414,12 +554,13 @@ DWORD QpsGetReadBufferSize(
     )
 {
     DWORD queuedData;
+    PPIPE_CLIENT client = &(Server->Clients[ClientIndex]);
 
-    if (!Server->WritePipes[ClientIndex])
+    if (!client->ReadPipe)
         return ERROR_NOT_CONNECTED;
 
-    EnterCriticalSection(&Server->Lock);
-    queuedData = (DWORD)CmqGetUsedSize(Server->Buffers[ClientIndex]);
-    LeaveCriticalSection(&Server->Lock);
+    EnterCriticalSection(&client->Lock);
+    queuedData = (DWORD)CmqGetUsedSize(client->ReadBuffer);
+    LeaveCriticalSection(&client->Lock);
     return queuedData;
 }

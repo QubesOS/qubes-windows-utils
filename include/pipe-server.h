@@ -19,7 +19,7 @@ until more data arrives.
 
 Writing to a client is non-blocking, a background thread is started
 to complete the operation in case the client blocks. The client
-is expected to read written data in certain amount of time,
+is expected to read written data in a certain amount of time,
 otherwise it's disconnected.
 
 The usual mode of operation is as follows:
@@ -84,6 +84,7 @@ DWORD QpsCreate(
     IN  PWCHAR PipeName, // This is a client->server pipe name (clients write, server reads). server->client pipes have "-%PID%" appended.
     IN  DWORD PipeBufferSize, // Pipe read/write buffer size. Shouldn't be too big.
     IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by QpsRead().
+    IN  DWORD WriteTimeout, // If a client doesn't read written data in this amount of milliseconds, it's disconnected.
     IN  QPS_CLIENT_CONNECTED ConnectCallback, // "Client connected" callback.
     IN  QPS_CLIENT_DISCONNECTED DisconnectCallback OPTIONAL, // "Client disconnected" callback.
     IN  QPS_DATA_RECEIVED ReadCallback OPTIONAL, // "Data received" callback.
@@ -132,7 +133,7 @@ DWORD QpsGetReadBufferSize(
     IN  DWORD ClientIndex
     );
 
-// Cancel all IO, disconnect client, deallocate client's data.
+// Cancel all IO, disconnect the client, deallocate client's data.
 WINDOWSUTILS_API
 void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
