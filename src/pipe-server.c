@@ -37,24 +37,24 @@ struct THREAD_PARAM
 };
 
 // Initialize data for a newly connected client.
-DWORD ServerConnect(
+DWORD QpsConnectClient(
     IN  PIPE_SERVER Server,
     IN  HANDLE WritePipe,
     IN  HANDLE ReadPipe
     );
 
-// Disconnect client, deallocate data.
-void ServerDisconnect(
+// Cancel all IO, disconnect client, deallocate client's data.
+void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex
     );
 
 // Create the server.
-DWORD QpsServerCreate(
+DWORD QpsCreate(
     IN  PWCHAR PipeName, // This is a client->server pipe name (clients write, server reads). server->client pipes have "-%PID%" appended.
     IN  DWORD PipeBufferSize, // Pipe read/write buffer size. Shouldn't be too big.
-    IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by ServerRead().
-    IN  QPS_CLIENT_CONNECTED ConnectCallback OPTIONAL, // "Client connected" callback.
+    IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by QpsRead().
+    IN  QPS_CLIENT_CONNECTED ConnectCallback, // "Client connected" callback.
     IN  QPS_CLIENT_DISCONNECTED DisconnectCallback OPTIONAL, // "Client disconnected" callback.
     IN  QPS_DATA_RECEIVED ReadCallback OPTIONAL, // "Data received" callback.
     IN  PVOID Context OPTIONAL, // Opaque parameter that will be passed to callbacks.
@@ -87,26 +87,26 @@ DWORD QpsServerCreate(
 cleanup:
     if (Status != ERROR_SUCCESS)
     {
-        QpsServerDestroy(*Server);
+        QpsDestroy(*Server);
         *Server = NULL;
     }
     return Status;
 }
 
-void QpsServerDestroy(
+void QpsDestroy(
     PIPE_SERVER Server
     )
 {
     if (Server != NULL)
     {
         for (DWORD i = 0; i < PS_MAX_CLIENTS; i++)
-            ServerDisconnect(Server, i); // safe if not connected
+            QpsDisconnectClient(Server, i); // safe if not connected
         DeleteCriticalSection(&Server->Lock);
         free(Server);
     }
 }
 
-static DWORD ServerAllocateIndex(
+static DWORD QpsAllocateIndex(
     IN  PIPE_SERVER Server
     )
 {
@@ -129,7 +129,7 @@ The ReadFile function returns when one of the following conditions occur:
 That means we can do ReadFile synchronously with a large buffer and not block until
 the whole buffer is read. The read will return once *something* is written to the other end.
 */
-static DWORD WINAPI ReaderThread(
+static DWORD WINAPI QpsReaderThread(
     PVOID Param
     )
 {
@@ -140,7 +140,7 @@ static DWORD WINAPI ReaderThread(
 
     if (!buffer)
     {
-        ServerDisconnect(param->Server, param->ClientIndex);
+        QpsDisconnectClient(param->Server, param->ClientIndex);
         free(param);
         return 1;
     }
@@ -153,7 +153,7 @@ static DWORD WINAPI ReaderThread(
         if (!ReadFile(pipe, buffer, param->Server->PipeBufferSize, &transferred, NULL))
         {
             LogWarning("[%lu] read failed: %d %x", param->ClientIndex, GetLastError(), GetLastError());
-            ServerDisconnect(param->Server, param->ClientIndex);
+            QpsDisconnectClient(param->Server, param->ClientIndex);
             free(param);
             free(buffer);
             return 1;
@@ -169,7 +169,7 @@ static DWORD WINAPI ReaderThread(
             // FIXME: block here until there's space
             LeaveCriticalSection(&param->Server->Lock);
             LogError("[%lu] read buffer full", param->ClientIndex);
-            ServerDisconnect(param->Server, param->ClientIndex);
+            QpsDisconnectClient(param->Server, param->ClientIndex);
             free(param);
             free(buffer);
             return 1;
@@ -178,7 +178,7 @@ static DWORD WINAPI ReaderThread(
     }
 }
 
-static DWORD WINAPI WriterThread(
+static DWORD WINAPI QpsWriterThread(
     PVOID Param
     )
 {
@@ -191,7 +191,7 @@ static DWORD WINAPI WriterThread(
     {
         LeaveCriticalSection(&param->Server->Lock);
         LogWarning("[%lu] write failed", param->ClientIndex);
-        ServerDisconnect(param->Server, param->ClientIndex);
+        QpsDisconnectClient(param->Server, param->ClientIndex);
     }
     else
         LeaveCriticalSection(&param->Server->Lock);
@@ -201,7 +201,7 @@ static DWORD WINAPI WriterThread(
     return 1;
 }
 
-static DWORD ServerConnect(
+static DWORD QpsConnectClient(
     IN  PIPE_SERVER Server,
     IN  HANDLE WritePipe,
     IN  HANDLE ReadPipe
@@ -212,7 +212,7 @@ static DWORD ServerConnect(
     struct THREAD_PARAM *param;
 
     EnterCriticalSection(&Server->Lock);
-    index = ServerAllocateIndex(Server);
+    index = QpsAllocateIndex(Server);
 
     Server->Buffers[index] = CmqCreate(Server->ReadBufferSize);
     if (Server->Buffers[index] == NULL)
@@ -231,7 +231,7 @@ static DWORD ServerConnect(
         return ERROR_NOT_ENOUGH_MEMORY;
     param->Server = Server;
     param->ClientIndex = index;
-    thread = CreateThread(NULL, 0, ReaderThread, param, 0, NULL);
+    thread = CreateThread(NULL, 0, QpsReaderThread, param, 0, NULL);
     if (!thread)
         return ERROR_NO_SYSTEM_RESOURCES;
 
@@ -243,7 +243,7 @@ static DWORD ServerConnect(
     return ERROR_SUCCESS;
 }
 
-static void ServerDisconnect(
+static void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex
     )
@@ -269,8 +269,8 @@ static void ServerDisconnect(
         Server->DisconnectCallback(Server, ClientIndex, Server->UserContext);
 }
 
-// Returns only on error. At that point the server state is undefined, call ServerDestroy.
-DWORD QpsServerLoop(
+// Returns only on error. At that point the server state is undefined, call QpsDestroy().
+DWORD QpsMainLoop(
     PIPE_SERVER Server
     )
 {
@@ -330,13 +330,13 @@ DWORD QpsServerLoop(
         } while (!connected);
 
         // initialize the client
-        status = ServerConnect(Server, writePipe, readPipe);
+        status = QpsConnectClient(Server, writePipe, readPipe);
         if (status != ERROR_SUCCESS)
             return status;
     }
 }
 
-DWORD QpsServerRead(
+DWORD QpsRead(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex,
     OUT void *Data,
@@ -370,7 +370,7 @@ DWORD QpsServerRead(
     return ERROR_SUCCESS;
 }
 
-DWORD QpsServerWrite(
+DWORD QpsWrite(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex,
     IN  const void *Data,
@@ -402,7 +402,7 @@ DWORD QpsServerWrite(
     memcpy(param->Data, Data, DataSize);
     param->DataSize = DataSize;
 
-    thread = CreateThread(NULL, 0, WriterThread, param, 0, NULL);
+    thread = CreateThread(NULL, 0, QpsWriterThread, param, 0, NULL);
     if (!thread)
     {
         free(param->Data);

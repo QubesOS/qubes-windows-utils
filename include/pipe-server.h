@@ -18,12 +18,14 @@ from the read buffer. If insufficient data is present, it waits
 until more data arrives.
 
 Writing to a client is non-blocking, a background thread is started
-to complete the operation in case the client blocks.
+to complete the operation in case the client blocks. The client
+is expected to read written data in certain amount of time,
+otherwise it's disconnected.
 
 The usual mode of operation is as follows:
 - Create the server object, register at least a QPS_CLIENT_CONNECTED
   callback function.
-- Call QpsServerLoop() in a separate thread.
+- Call QpsMainLoop() in a separate thread.
 - When a client connects in the QPS_CLIENT_CONNECTED callback,
   start a new thread to handle the communication. Callbacks are
   blocking and should return ASAP.
@@ -70,7 +72,7 @@ typedef void(*QPS_CLIENT_DISCONNECTED)(struct _PIPE_SERVER *Server, DWORD Index,
 Callback invoked when data has been read from a client.
 Probably not very useful since you can't expect the reads having predictable sizes.
 Read data is enqueued in FIFO manner in an internal buffer.
-Use ServerRead() for structured, buffered reads.
+Use QpsRead() for structured, buffered reads.
 */
 typedef void(*QPS_DATA_RECEIVED)(struct _PIPE_SERVER *Server, DWORD Index, PVOID Data, DWORD DataSize, PVOID Context);
 
@@ -78,10 +80,10 @@ typedef void(*QPS_DATA_RECEIVED)(struct _PIPE_SERVER *Server, DWORD Index, PVOID
 
 // Create the server.
 WINDOWSUTILS_API
-DWORD QpsServerCreate(
+DWORD QpsCreate(
     IN  PWCHAR PipeName, // This is a client->server pipe name (clients write, server reads). server->client pipes have "-%PID%" appended.
     IN  DWORD PipeBufferSize, // Pipe read/write buffer size. Shouldn't be too big.
-    IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by ServerRead().
+    IN  DWORD ReadBufferSize, // Read buffer (per client). The server enqueues all received data here until it's read by QpsRead().
     IN  QPS_CLIENT_CONNECTED ConnectCallback, // "Client connected" callback.
     IN  QPS_CLIENT_DISCONNECTED DisconnectCallback OPTIONAL, // "Client disconnected" callback.
     IN  QPS_DATA_RECEIVED ReadCallback OPTIONAL, // "Data received" callback.
@@ -92,21 +94,21 @@ DWORD QpsServerCreate(
 
 // Destroy the server, disconnect all clients, deallocate memory.
 WINDOWSUTILS_API
-void QpsServerDestroy(
+void QpsDestroy(
     PIPE_SERVER Server // The server to destroy.
     );
 
 // Main loop of the server. Call to start accepting clients.
 // Returns only on error. At that point the server state is undefined, call ServerDestroy.
 WINDOWSUTILS_API
-DWORD QpsServerLoop(
+DWORD QpsMainLoop(
     PIPE_SERVER Server
     );
 
 // Blocking read from a client.
 // Returns immediately if the internal read queue has enough data.
 WINDOWSUTILS_API
-DWORD QpsServerRead(
+DWORD QpsRead(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex,
     OUT void *Data,
@@ -116,7 +118,7 @@ DWORD QpsServerRead(
 // Nonblocking write to a client.
 // Uses a background thread to write.
 WINDOWSUTILS_API
-DWORD QpsServerWrite(
+DWORD QpsWrite(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex,
     IN  const void *Data,
