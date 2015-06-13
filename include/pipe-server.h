@@ -132,6 +132,13 @@ DWORD QpsGetReadBufferSize(
     IN  DWORD ClientIndex
     );
 
+// Cancel all IO, disconnect client, deallocate client's data.
+WINDOWSUTILS_API
+void QpsDisconnectClient(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientIndex
+    );
+
 #ifdef __cplusplus
 }
 #endif

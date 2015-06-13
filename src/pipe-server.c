@@ -43,12 +43,6 @@ DWORD QpsConnectClient(
     IN  HANDLE ReadPipe
     );
 
-// Cancel all IO, disconnect client, deallocate client's data.
-void QpsDisconnectClient(
-    IN  PIPE_SERVER Server,
-    IN  DWORD ClientIndex
-    );
-
 // Create the server.
 DWORD QpsCreate(
     IN  PWCHAR PipeName, // This is a client->server pipe name (clients write, server reads). server->client pipes have "-%PID%" appended.
@@ -243,7 +237,7 @@ static DWORD QpsConnectClient(
     return ERROR_SUCCESS;
 }
 
-static void QpsDisconnectClient(
+void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientIndex
     )
