@@ -144,7 +144,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     WCHAR *format = L"%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log";
     WCHAR systemPath[MAX_PATH];
     WCHAR buffer[MAX_PATH];
-    DWORD versionMajor, versionMinor;
+    DWORD versionMajor = 0, versionMinor = 0;
 
     if (g_LogLevel < 0)
         g_LogLevel = LOG_LEVEL_INFO; // default
@@ -215,12 +215,14 @@ fallback:
         LogInfo("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
     }
 
-    GetCurrentModuleVersion(&versionMajor, &versionMinor);
-    LogInfo("Module version: %d.%d.%d.%d",
-        (versionMajor >> 0x10) & 0xffff,
-        (versionMajor >> 0x00) & 0xffff,
-        (versionMinor >> 0x10) & 0xffff,
-        (versionMinor >> 0x00) & 0xffff);
+    if (ERROR_SUCCESS == GetCurrentModuleVersion(&versionMajor, &versionMinor))
+    {
+        LogInfo("Module version: %d.%d.%d.%d",
+                (versionMajor >> 0x10) & 0xffff,
+                (versionMajor >> 0x00) & 0xffff,
+                (versionMinor >> 0x10) & 0xffff,
+                (versionMinor >> 0x00) & 0xffff);
+    }
 }
 
 // Use the log directory from registry config.
