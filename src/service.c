@@ -40,8 +40,6 @@ static void SvcSetState(
 
     if (!SetServiceStatus(g_Service->StatusHandle, &g_Service->Status))
         perror("SetServiceStatus");
-    else
-        LogVerbose("success");
 }
 
 DWORD SvcMainLoop(
@@ -88,20 +86,12 @@ DWORD SvcMainLoop(
 static void SvcStop(
     )
 {
-    LogDebug("Waiting for the worker thread to exit");
+    LogDebug("stopping");
+    SvcSetState(SERVICE_STOP_PENDING, NO_ERROR);
 
     SetEvent(g_Service->StopEvent);
-    WaitForSingleObject(g_Service->WorkerThread, INFINITE);
 
-    CloseHandle(g_Service->WorkerThread);
-    CloseHandle(g_Service->StopEvent);
-
-    SvcSetState(SERVICE_STOPPED, NO_ERROR);
-
-    free(g_Service);
-    g_Service = NULL;
-
-    LogVerbose("success");
+    // SvcMain waits for the worker thread to exit and completes shutdown
 }
 
 // Default notification handler.
@@ -121,7 +111,6 @@ static DWORD WINAPI SvcCtrlHandlerEx(
     {
     case SERVICE_CONTROL_SHUTDOWN:
     case SERVICE_CONTROL_STOP:
-        SvcSetState(SERVICE_STOP_PENDING, NO_ERROR);
         SvcStop();
         break;
 
@@ -133,13 +122,11 @@ static DWORD WINAPI SvcCtrlHandlerEx(
         if (NO_ERROR != status)
         {
             perror2(status, "user notification handler");
-            SvcSetState(SERVICE_STOP_PENDING, NO_ERROR);
             SvcStop();
         }
         break;
     }
 
-    LogVerbose("success");
     return NO_ERROR;
 }
 
@@ -179,6 +166,18 @@ static void WINAPI SvcMain(DWORD argc, WCHAR *argv[])
 
     // ready to receive notifications
     SvcSetState(SERVICE_RUNNING, NO_ERROR);
+
+    LogDebug("Waiting for the worker thread to exit");
+    WaitForSingleObject(g_Service->WorkerThread, INFINITE);
+
+    SvcSetState(SERVICE_STOPPED, NO_ERROR);
+
+    LogDebug("cleanup");
+    CloseHandle(g_Service->WorkerThread);
+    CloseHandle(g_Service->StopEvent);
+
+    free(g_Service);
+    g_Service = NULL;
 
     LogVerbose("success");
 }
