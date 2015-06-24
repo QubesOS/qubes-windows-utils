@@ -79,3 +79,8 @@ DWORD ConvertUTF16ToUTF8(IN const WCHAR *inputUtf16, OUT char **outputUtf8, OUT 
     *outputUtf8 = bufferUtf8;
     return ERROR_SUCCESS;
 }
+
+void ConvertFree(void *p)
+{
+    free(p);
+}
