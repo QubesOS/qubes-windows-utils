@@ -441,6 +441,10 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
 #if defined(DEBUG) || defined(_DEBUG)
             OutputDebugString(buffer);
+            if (addNewline && !raw)
+            {
+                OutputDebugStringA(newline);
+            }
 #endif
         }
     }
