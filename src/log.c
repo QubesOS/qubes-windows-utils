@@ -145,6 +145,8 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     WCHAR systemPath[MAX_PATH];
     WCHAR buffer[MAX_PATH];
     DWORD versionMajor = 0, versionMinor = 0;
+    HANDLE token;
+    DWORD sessionId;
 
     if (g_LogLevel < 0)
         g_LogLevel = LOG_LEVEL_INFO; // default
@@ -215,6 +217,7 @@ fallback:
         LogInfo("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
     }
 
+    // version
     if (ERROR_SUCCESS == GetCurrentModuleVersion(&versionMajor, &versionMinor))
     {
         LogInfo("Module version: %d.%d.%d.%d",
@@ -223,6 +226,12 @@ fallback:
                 (versionMinor >> 0x10) & 0xffff,
                 (versionMinor >> 0x00) & 0xffff);
     }
+
+    // session
+    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token);
+    GetTokenInformation(token, TokenSessionId, &sessionId, sizeof(sessionId), &len);
+    CloseHandle(token);
+    LogInfo("Session: %lu", sessionId);
 }
 
 // Use the log directory from registry config.
