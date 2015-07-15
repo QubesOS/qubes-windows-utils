@@ -44,6 +44,7 @@ MultiWStrSize(
 * @param Str String to add.
 * @return TRUE if successful, FALSE otherwise.
 */
+WINDOWSUTILS_API
 BOOL
 MultiStrAdd(
     IN OUT PCHAR MultiStr,
@@ -58,6 +59,7 @@ MultiStrAdd(
 * @param Str Wstring to add.
 * @return TRUE if successful, FALSE otherwise.
 */
+WINDOWSUTILS_API
 BOOL
 MultiWStrAdd(
     IN OUT PWCHAR MultiStr,
