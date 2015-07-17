@@ -69,6 +69,7 @@
     <ClInclude Include="..\..\include\error.h" />
     <ClInclude Include="..\..\include\exec.h" />
     <ClInclude Include="..\..\include\getopt.h" />
+    <ClInclude Include="..\..\include\list.h" />
     <ClInclude Include="..\..\include\log.h" />
     <ClInclude Include="..\..\include\pipe-server.h" />
     <ClInclude Include="..\..\include\qrexec.h" />
