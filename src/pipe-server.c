@@ -697,7 +697,7 @@ DWORD QpsGetReadBufferSize(
 
     LogVerbose("[%lu]", ClientId);
     if (!client)
-        return ERROR_NOT_CONNECTED;
+        return 0;
 
     EnterCriticalSection(&client->Lock);
     queuedData = (DWORD)CmqGetUsedSize(client->ReadBuffer);
