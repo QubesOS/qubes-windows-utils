@@ -22,6 +22,7 @@ typedef struct _PIPE_CLIENT
     HANDLE ReaderThread;
     HANDLE WriterThread;
     DWORD RefCount;
+    PVOID UserData;
 } PIPE_CLIENT, *PPIPE_CLIENT;
 
 typedef struct _PIPE_SERVER
@@ -703,4 +704,42 @@ DWORD QpsGetReadBufferSize(
     LeaveCriticalSection(&client->Lock);
     QpsReleaseClient(Server, client);
     return queuedData;
+}
+
+DWORD QpsSetClientData(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientId,
+    IN  PVOID UserData
+    )
+{
+    PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
+
+    LogVerbose("[%lu]", ClientId);
+    if (!client)
+        return ERROR_NOT_CONNECTED;
+
+    EnterCriticalSection(&client->Lock);
+    client->UserData = UserData;
+    LeaveCriticalSection(&client->Lock);
+    QpsReleaseClient(Server, client);
+    return ERROR_SUCCESS;
+}
+
+PVOID QpsGetClientData(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientId
+    )
+{
+    PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
+    PVOID data;
+
+    LogVerbose("[%lu]", ClientId);
+    if (!client)
+        return NULL;
+
+    EnterCriticalSection(&client->Lock);
+    data = client->UserData;
+    LeaveCriticalSection(&client->Lock);
+    QpsReleaseClient(Server, client);
+    return data;
 }

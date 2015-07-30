@@ -134,6 +134,21 @@ void QpsDisconnectClient(
     IN  DWORD ClientId
     );
 
+// Assign arbitrary data to the client.
+WINDOWSUTILS_API
+DWORD QpsSetClientData(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientId,
+    IN  PVOID UserData
+    );
+
+// Get user data assigned to the client.
+WINDOWSUTILS_API
+PVOID QpsGetClientData(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientId
+    );
+
 #ifdef __cplusplus
 }
 #endif
