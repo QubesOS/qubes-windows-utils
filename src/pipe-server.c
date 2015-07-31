@@ -163,9 +163,12 @@ static DWORD QpsAllocateClientId(
     return ++Server->NextClientId;
 }
 
-static PPIPE_CLIENT QpsGetClient(
+// Get client's data by ID and optionally increase the client's refcount.
+// DO NOT USE unless you know EXACTLY why you want to NOT increase the refcount.
+static PPIPE_CLIENT QpsGetClientRaw(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  DWORD ClientId,
+    IN  BOOL IncreaseRefcount
     )
 {
     PLIST_ENTRY entry;
@@ -188,7 +191,8 @@ static PPIPE_CLIENT QpsGetClient(
 
     if (returnClient)
     {
-        InterlockedIncrement(&returnClient->RefCount);
+        if (IncreaseRefcount)
+            InterlockedIncrement(&returnClient->RefCount);
         LogVerbose("[%lu] (%p) refs: %lu", returnClient->Id, returnClient, returnClient->RefCount);
     }
     else
@@ -199,7 +203,18 @@ static PPIPE_CLIENT QpsGetClient(
     return returnClient;
 }
 
-// server or client lock must *NOT* be held
+// Use this function to access client's data by ID. It increases the client's refcount.
+// Call QpsReleaseClient after you're done touching the client's data.
+static PPIPE_CLIENT QpsGetClient(
+    IN  PIPE_SERVER Server,
+    IN  DWORD ClientId
+    )
+{
+    return QpsGetClientRaw(Server, ClientId, TRUE);
+}
+
+// Release the client (decreases the client's refcount).
+// Server or client lock must *NOT* be held.
 static void QpsReleaseClient(
     IN  PIPE_SERVER Server,
     IN  PPIPE_CLIENT Client
@@ -463,17 +478,32 @@ static DWORD QpsConnectClient(
     LeaveCriticalSection(&Server->Lock);
 
     if (Server->ConnectCallback)
+    {
+        // Increase the refcount if the connect callback is registered (pretty much always).
+        // Our host (application that registered the callback) will need to call
+        // QpsDisconnectClient after it's done interacting with the client
+        // (this will decrease the refcount and allow for client data cleanup).
+        InterlockedIncrement(&client->RefCount);
         Server->ConnectCallback(Server, client->Id, Server->UserContext);
+    }
 
     return ERROR_SUCCESS;
 }
 
+// Public API. Decreases the client's refcount.
+// DO NOT USE HERE. It will mess up the refcount. Use QpsDisconnectClientInternal directly.
 void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
     IN  DWORD ClientId
     )
 {
+    PPIPE_CLIENT client;
+
+    LogDebug("[%lu]", ClientId);
     QpsDisconnectClientInternal(Server, ClientId, FALSE, FALSE);
+    // We need to decrease the refcount without increasing it.
+    client = QpsGetClientRaw(Server, ClientId, FALSE);
+    QpsReleaseClient(Server, client);
 }
 
 static void QpsDisconnectClientInternal(

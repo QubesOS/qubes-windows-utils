@@ -31,6 +31,7 @@ The usual mode of operation is as follows:
   blocking and should return ASAP.
 - A single client thread usually flows according to the desired
   communication protocol state machine.
+- Make sure to call QpsDisconnectClient after you're done with the client.
 */
 
 #ifdef __cplusplus
@@ -128,6 +129,7 @@ DWORD QpsGetReadBufferSize(
     );
 
 // Cancel all IO, disconnect the client, deallocate client's data.
+// Make sure to call when you're done with the client.
 WINDOWSUTILS_API
 void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
