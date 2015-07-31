@@ -149,6 +149,14 @@ PVOID QpsGetClientData(
     IN  DWORD ClientId
     );
 
+// Client API: connect to a server.
+WINDOWSUTILS_API
+DWORD QpsConnect(
+    IN  PWCHAR PipeName,
+    OUT HANDLE *ReadPipe,
+    OUT HANDLE *WritePipe
+    );
+
 #ifdef __cplusplus
 }
 #endif

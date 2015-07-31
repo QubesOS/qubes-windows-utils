@@ -580,6 +580,7 @@ DWORD QpsMainLoop(
                 Sleep(10);
         } while (!connected);
 
+        LogVerbose("outbound pipe connected");
         // prepare the read pipe
         if (!GetNamedPipeClientProcessId(writePipe, &pid))
         {
@@ -602,6 +603,7 @@ DWORD QpsMainLoop(
             if (!connected)
                 Sleep(10);
         } while (!connected);
+        LogVerbose("inbound pipe connected");
 
         // initialize the client
         status = QpsConnectClient(Server, writePipe, readPipe);
@@ -640,6 +642,7 @@ DWORD QpsRead(
         EnterCriticalSection(&client->Lock);
         ret = CmqGetData(client->ReadBuffer, Data, &size, CMQ_NO_UNDERFLOW);
         LeaveCriticalSection(&client->Lock);
+
         if (!ret)
             Sleep(1); // don't congest the lock
     } while (!ret);
@@ -742,4 +745,64 @@ PVOID QpsGetClientData(
     LeaveCriticalSection(&client->Lock);
     QpsReleaseClient(Server, client);
     return data;
+}
+
+DWORD QpsConnect(
+    IN  PWCHAR PipeName,
+    OUT HANDLE *ReadPipe,
+    OUT HANDLE *WritePipe
+    )
+{
+    DWORD pid;
+    DWORD status;
+    WCHAR writePipeName[256];
+
+    // Try to open the read pipe; wait for it, if necessary.
+    do
+    {
+        LogDebug("opening read pipe: %s", PipeName);
+        *ReadPipe = CreateFile(PipeName,
+                              GENERIC_READ, // this is an inbound pipe
+                              0,
+                              NULL,
+                              OPEN_EXISTING,
+                              0,
+                              NULL);
+
+        // Exit if an error other than ERROR_PIPE_BUSY occurs.
+        status = GetLastError();
+        if (*ReadPipe == INVALID_HANDLE_VALUE)
+        {
+            if (ERROR_PIPE_BUSY != status)
+                return perror("open read pipe");
+
+            // Wait until the pipe is available.
+            if (!WaitNamedPipe(PipeName, NMPWAIT_WAIT_FOREVER))
+                return perror("WaitNamedPipe(read)");
+        }
+    } while (*ReadPipe == INVALID_HANDLE_VALUE);
+
+    // Try to open the write pipe; wait for it, if necessary.
+    pid = GetCurrentProcessId();
+    StringCbPrintf(writePipeName, sizeof(writePipeName), L"%s-%d", PipeName, pid);
+    do
+    {
+        LogDebug("opening write pipe: %s", writePipeName);
+        *WritePipe = CreateFile(writePipeName,
+                                GENERIC_WRITE, // this is an outbound pipe
+                                0,
+                                NULL,
+                                OPEN_EXISTING,
+                                0,
+                                NULL);
+
+        // This pipe may be not created yet
+        status = GetLastError();
+        if ((*WritePipe == INVALID_HANDLE_VALUE) && (ERROR_FILE_NOT_FOUND != status))
+            return perror("open write pipe");
+
+        Sleep(10);
+    } while (*WritePipe == INVALID_HANDLE_VALUE);
+
+    return ERROR_SUCCESS;
 }
