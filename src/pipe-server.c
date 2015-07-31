@@ -498,7 +498,7 @@ static void QpsDisconnectClientInternal(
     }
 
     client->Disconnecting = TRUE;
-    LogInfo("[%lu] (%p) disconnecting", ClientId, client);
+    LogInfo("[%lu] (%p) disconnecting, WriterExiting %d, ReaderExiting %d", ClientId, client, WriterExiting, ReaderExiting);
 
     if (!WriterExiting)
     {
@@ -518,6 +518,7 @@ static void QpsDisconnectClientInternal(
             TerminateThread(client->WriterThread, 0);
         }
     }
+    LogDebug("[%lu] (%p) closing write handles", ClientId, client);
     CloseHandle(client->WriterThread);
     client->WriterThread = NULL;
     CloseHandle(client->WritePipe);
@@ -526,6 +527,7 @@ static void QpsDisconnectClientInternal(
     if (!ReaderExiting)
     {
         // wait for the reader thread to exit
+        LogVerbose("[%lu] (%p) canceling read", ClientId, client);
         if (!CancelIo(client->ReadPipe)) // this will abort a blocking operation
             perror("CancelIo(read)");
 
@@ -536,6 +538,7 @@ static void QpsDisconnectClientInternal(
             TerminateThread(client->ReaderThread, 0);
         }
     }
+    LogDebug("[%lu] (%p) closing read handles", ClientId, client);
     CloseHandle(client->ReaderThread);
     client->ReaderThread = NULL;
     CloseHandle(client->ReadPipe);
@@ -630,13 +633,6 @@ DWORD QpsRead(
     // get data from the read buffer until the requested amount is read
     do
     {
-        if (client->Disconnecting)
-        {
-            QpsReleaseClient(Server, client);
-            LogWarning("[%lu] client is disconnected", ClientId);
-            return ERROR_BROKEN_PIPE;
-        }
-
         // get data from the read buffer if available
         size = DataSize;
         EnterCriticalSection(&client->Lock);
@@ -644,7 +640,18 @@ DWORD QpsRead(
         LeaveCriticalSection(&client->Lock);
 
         if (!ret)
+        {
+            // If there's not enough data and the client is disconnecting,
+            // that means we'll never have enough data: abort.
+            if (client->Disconnecting)
+            {
+                QpsReleaseClient(Server, client);
+                LogWarning("[%lu] client is disconnected", ClientId);
+                return ERROR_BROKEN_PIPE;
+            }
+
             Sleep(1); // don't congest the lock
+        }
     } while (!ret);
 
     QpsReleaseClient(Server, client);
