@@ -89,6 +89,14 @@ DWORD CreateNormalProcessAsCurrentUser(
 WINDOWSUTILS_API
 PWSTR GetArgument(void);
 
+// Create a security descriptor that grants Everyone read/write access to a pipe.
+// Caller must LocalFree both pointers.
+WINDOWSUTILS_API
+DWORD CreatePublicPipeSecurityDescriptor(
+    OUT PSECURITY_DESCRIPTOR *securityDescriptor,
+    OUT PACL *acl
+    );
+
 #ifdef __cplusplus
 }
 #endif

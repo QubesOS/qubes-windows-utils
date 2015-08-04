@@ -738,3 +738,86 @@ PWSTR GetArgument(void)
 
     return cmd;
 }
+
+DWORD CreatePublicPipeSecurityDescriptor(
+    OUT PSECURITY_DESCRIPTOR *securityDescriptor,
+    OUT PACL *acl
+    )
+{
+    DWORD status;
+    SID *everyoneSid = NULL;
+    SID *adminSid = NULL;
+    EXPLICIT_ACCESS	ea[2] = { 0 };
+    SID_IDENTIFIER_AUTHORITY sidAuthWorld = SECURITY_WORLD_SID_AUTHORITY;
+
+    LogVerbose("start");
+
+    if (!securityDescriptor || !acl)
+        return ERROR_INVALID_PARAMETER;
+
+    // Create a well-known SID for the Everyone group.
+    if (!AllocateAndInitializeSid(
+        &sidAuthWorld,
+        1,
+        SECURITY_WORLD_RID,
+        0, 0, 0, 0, 0, 0, 0,
+        &everyoneSid))
+    {
+        return perror("AllocateAndInitializeSid");
+    }
+
+    *acl = NULL;
+    *securityDescriptor = NULL;
+
+    // Initialize an EXPLICIT_ACCESS structure for an ACE.
+    // The ACE will allow Everyone read/write access to the pipe.
+    ea[0].grfAccessPermissions = FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_CREATE_PIPE_INSTANCE | SYNCHRONIZE;
+    ea[0].grfAccessMode = SET_ACCESS;
+    ea[0].grfInheritance = NO_INHERITANCE;
+    ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea[0].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+    ea[0].Trustee.ptstrName = (WCHAR *)everyoneSid;
+
+    // Create a new ACL that contains the new ACE.
+    status = SetEntriesInAcl(1, ea, NULL, acl);
+
+    if (ERROR_SUCCESS != status)
+    {
+        perror2(status, "SetEntriesInAcl");
+        goto cleanup;
+    }
+
+    // Initialize a security descriptor.
+    *securityDescriptor = (SECURITY_DESCRIPTOR *)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+    if (*securityDescriptor == NULL)
+    {
+        perror("LocalAlloc");
+        goto cleanup;
+    }
+
+    if (!InitializeSecurityDescriptor(*securityDescriptor, SECURITY_DESCRIPTOR_REVISION))
+    {
+        status = perror("InitializeSecurityDescriptor");
+        goto cleanup;
+    }
+
+    // Add the ACL to the security descriptor.
+    if (!SetSecurityDescriptorDacl(*securityDescriptor, TRUE, *acl, FALSE))
+    {
+        status = perror("SetSecurityDescriptorDacl");
+        goto cleanup;
+    }
+
+    status = ERROR_SUCCESS;
+
+    LogVerbose("success");
+
+cleanup:
+    if (everyoneSid)
+        FreeSid(everyoneSid);
+    if (status != ERROR_SUCCESS && (*acl))
+        LocalFree(*acl);
+    if (status != ERROR_SUCCESS && (*securityDescriptor))
+        LocalFree(*securityDescriptor);
+    return status;
+}
