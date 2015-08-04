@@ -84,6 +84,7 @@ DWORD QpsCreate(
 {
     DWORD Status = ERROR_NOT_ENOUGH_MEMORY;
 
+    LogVerbose("pipe name '%s'", PipeName);
     *Server = malloc(sizeof(struct _PIPE_SERVER));
     if (*Server == NULL)
         goto cleanup;
@@ -608,6 +609,7 @@ DWORD QpsMainLoop(
         // wait for connection
         do
         {
+            LogVerbose("waiting for connection");
             connected = ConnectNamedPipe(writePipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
             if (!connected)
                 Sleep(10);
