@@ -250,7 +250,7 @@ DWORD GrantDesktopAccess(
     newEa[0].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
     newEa[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
     newEa[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
-    newEa[0].Trustee.ptstrName = (WCHAR *) sid;
+    newEa[0].Trustee.ptstrName = (WCHAR *)sid;
 
     newEa[1] = newEa[0];
 
@@ -409,69 +409,80 @@ cleanup:
     return status;
 }
 
+HANDLE GetLoggedOnUserToken(
+    OUT PWCHAR userName,
+    IN  DWORD cchUserName // at least UNLEN WCHARs
+    )
+{
+    DWORD consoleSessionId;
+    HANDLE userToken, duplicateToken;
+    DWORD nameSize = UNLEN;
+
+    consoleSessionId = WTSGetActiveConsoleSessionId();
+    if (0xFFFFFFFF == consoleSessionId)
+    {
+        LogWarning("no active console session");
+        return NULL;
+    }
+
+    if (!WTSQueryUserToken(consoleSessionId, &userToken))
+    {
+        LogDebug("no user is logged on");
+        return NULL;
+    }
+
+    // create a primary token (needed for logon)
+    if (!DuplicateTokenEx(
+        userToken,
+        MAXIMUM_ALLOWED,
+        NULL,
+        SecurityIdentification,
+        TokenPrimary,
+        &duplicateToken))
+    {
+        perror("DuplicateTokenEx");
+        CloseHandle(userToken);
+        return NULL;
+    }
+
+    CloseHandle(userToken);
+
+    if (!ImpersonateLoggedOnUser(duplicateToken))
+    {
+        perror("ImpersonateLoggedOnUser");
+        CloseHandle(duplicateToken);
+        return NULL;
+    }
+
+    if (!GetUserName(userName, &cchUserName))
+    {
+        perror("GetUserName");
+        userName[0] = 0;
+    }
+
+    RevertToSelf();
+
+    return duplicateToken;
+}
+
 DWORD CreatePipedProcessAsCurrentUser(
-    IN WCHAR *commandLine, // non-const, CreateProcess can modify it
-    IN HANDLE pipeStdin,
-    IN HANDLE pipeStdout,
-    IN HANDLE pipeStderr,
+    IN  WCHAR *commandLine, // non-const, CreateProcess can modify it
+    IN  BOOL interactive,
+    IN  HANDLE pipeStdin,
+    IN  HANDLE pipeStdout,
+    IN  HANDLE pipeStderr,
     OUT HANDLE *process
     )
 {
-    PROCESS_INFORMATION pi = { 0 };
-    STARTUPINFO si = { 0 };
-    BOOL inheritHandles;
-
-    if (!commandLine || !process)
-        return ERROR_INVALID_PARAMETER;
-
-    *process = INVALID_HANDLE_VALUE;
-
-    LogDebug("%s", commandLine);
-
-    si.cb = sizeof(si);
-
-    inheritHandles = FALSE;
-
-    if (INVALID_HANDLE_VALUE != pipeStdin &&
-        INVALID_HANDLE_VALUE != pipeStdout &&
-        INVALID_HANDLE_VALUE != pipeStderr)
-    {
-        si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdInput = pipeStdin;
-        si.hStdOutput = pipeStdout;
-        si.hStdError = pipeStderr;
-
-        inheritHandles = TRUE;
-    }
-
-    if (!CreateProcess(
-        NULL,
-        commandLine,
-        NULL,
-        NULL,
-        inheritHandles, // inherit handles if IO is piped
-        CREATE_NO_WINDOW,
-        NULL,
-        NULL,
-        &si,
-        &pi))
-    {
-        return perror("CreateProcess");
-    }
-
-    LogDebug("pid %lu", pi.dwProcessId);
-
-    *process = pi.hProcess;
-    CloseHandle(pi.hThread);
-
-    return ERROR_SUCCESS;
+    LogVerbose("cmd '%s', interactive %d", commandLine, interactive);
+    return CreatePipedProcessAsUser(NULL, NULL, commandLine, interactive, pipeStdin, pipeStdout, pipeStderr, process);
 }
 
 DWORD CreatePipedProcessAsUser(
-    IN const WCHAR *userName,
+    IN const WCHAR *userName OPTIONAL, // use current if null
     IN const WCHAR *userPassword,
     IN WCHAR *commandLine, // non-const, CreateProcess can modify it
-    IN BOOL runInteractively,
+    IN BOOL interactive,
     IN HANDLE pipeStdin,
     IN HANDLE pipeStdout,
     IN HANDLE pipeStderr,
@@ -482,26 +493,21 @@ DWORD CreatePipedProcessAsUser(
     DWORD currentSessionId;
     DWORD status = ERROR_UNIDENTIFIED_ERROR;
     HANDLE userToken = NULL;
-    HANDLE userTokenDuplicate = NULL;
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFO si = { 0 };
     void *environment = NULL;
-    WCHAR loggedUserName[UNLEN + 1];
-    DWORD nSize;
+    WCHAR loggedUserName[UNLEN];
     BOOL inheritHandles;
-    BOOL userIsLoggedOn;
-    BOOL impersonating = FALSE;
+    BOOL userIsLoggedOn = FALSE;
 
-    if (!userName || !commandLine || !process)
+    if (!commandLine || !process)
         return ERROR_INVALID_PARAMETER;
 
     *process = INVALID_HANDLE_VALUE;
-    LogDebug("%s, %s", userName, commandLine);
+    LogDebug("user '%s', cmd '%s', interactive %d", userName, commandLine, interactive);
 
     if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
-    {
-        return perror("ProcessIdToSessionId");
-    }
+        return perror("get current session id");
 
     consoleSessionId = WTSGetActiveConsoleSessionId();
     if (0xFFFFFFFF == consoleSessionId)
@@ -510,86 +516,84 @@ DWORD CreatePipedProcessAsUser(
         return ERROR_NOT_SUPPORTED;
     }
 
-    if (!WTSQueryUserToken(consoleSessionId, &userToken))
+    LogDebug("current session: %d, console session: %d", currentSessionId, consoleSessionId);
+
+    if (!userName) // run as current user
     {
-        return perror("WTSQueryUserToken");
-    }
+        HANDLE duplicateToken;
 
-    if (!DuplicateTokenEx(
-        userToken,
-        MAXIMUM_ALLOWED,
-        NULL,
-        SecurityIdentification,
-        TokenPrimary,
-        &userTokenDuplicate))
-    {
-        status = perror("DuplicateTokenEx");
-        goto cleanup;
-    }
+        if (!OpenProcessToken(GetCurrentProcess(), MAXIMUM_ALLOWED, &userToken))
+            return perror("open current process token");
 
-    CloseHandle(userToken);
-    userToken = userTokenDuplicate;
-
-    // Check if the logged on user is the same as the user specified by pwszUserName -
-    // in that case we won't need to do LogonUser()
-    if (!ImpersonateLoggedOnUser(userToken))
-    {
-        status = perror("ImpersonateLoggedOnUser");
-        goto cleanup;
-    }
-
-    impersonating = TRUE;
-
-    nSize = RTL_NUMBER_OF(loggedUserName);
-    if (!GetUserName(loggedUserName, &nSize))
-    {
-        status = perror("GetUserName");
-        goto cleanup;
-    }
-
-    RevertToSelf();
-    impersonating = FALSE;
-    userIsLoggedOn = FALSE;
-
-    if (wcscmp(loggedUserName, userName))
-    {
-        // Current user is not the one specified by userName. Log on the required user.
+        // create a new primary token
+        if (!DuplicateTokenEx(
+            userToken,
+            MAXIMUM_ALLOWED,
+            NULL,
+            SecurityIdentification,
+            TokenPrimary,
+            &duplicateToken))
+        {
+            status = perror("create new primary token for current user");
+            CloseHandle(userToken);
+            return status;
+        }
 
         CloseHandle(userToken);
-        userToken = NULL;
-
-        if (!LogonUser(
-            userName,
-            L".",
-            userPassword,
-            LOGON32_LOGON_INTERACTIVE,
-            LOGON32_PROVIDER_DEFAULT,
-            &userToken))
-        {
-            status = perror("LogonUser");
-            goto cleanup;
-        }
+        userToken = duplicateToken;
+        userIsLoggedOn = TRUE;
     }
     else
-        userIsLoggedOn = TRUE;
+    {
+        userToken = GetLoggedOnUserToken(loggedUserName, RTL_NUMBER_OF(loggedUserName));
 
-    if (!runInteractively)
+        // Check if the logged on user is the same as the user specified by userName -
+        // in that case we won't need to do LogonUser()
+        if (userToken)
+            LogDebug("logged on user name: '%s'", loggedUserName);
+
+        if (!userToken || wcscmp(loggedUserName, userName))
+        {
+            if (userToken)
+            {
+                CloseHandle(userToken);
+                userToken = NULL;
+            }
+
+            if (!LogonUser(
+                userName,
+                L".",
+                userPassword,
+                LOGON32_LOGON_INTERACTIVE,
+                LOGON32_PROVIDER_DEFAULT,
+                &userToken))
+            {
+                status = perror("LogonUser");
+                goto cleanup;
+            }
+        }
+        else
+            userIsLoggedOn = TRUE;
+    }
+    if (!interactive)
         consoleSessionId = currentSessionId;
 
-    if (!(userIsLoggedOn && runInteractively))
+    if (!SetTokenInformation(userToken, TokenSessionId, &consoleSessionId, sizeof(consoleSessionId)))
     {
-        // Do not do this if the specified user is currently logged on and the process is run interactively
-        // because the user already has all the access to the window station and desktop, and
-        // we don't have to change the session.
-        if (!SetTokenInformation(userToken, TokenSessionId, &consoleSessionId, sizeof(consoleSessionId)))
-        {
-            status = perror("SetTokenInformation");
-            goto cleanup;
-        }
+        status = perror("set token session id");
+        goto cleanup;
+    }
 
+    if (!userIsLoggedOn)
+    {
+        // If the process is started using a newly created logon session,
+        // this user must be granted access to the interactive desktop and window station.
+        LogWarning("need to grant access to console session %d", consoleSessionId);
+        return ERROR_NOT_SUPPORTED;
+        /*
         status = GrantRemoteSessionDesktopAccess(consoleSessionId, userName, NULL);
         if (ERROR_SUCCESS != status)
-            perror2(status, "GrantRemoteSessionDesktopAccess");
+        perror2(status, "GrantRemoteSessionDesktopAccess");*/
     }
 
     if (!CreateEnvironmentBlock(&environment, userToken, TRUE))
@@ -598,15 +602,7 @@ DWORD CreatePipedProcessAsUser(
         goto cleanup;
     }
 
-    if (!ImpersonateLoggedOnUser(userToken))
-    {
-        status = perror("ImpersonateLoggedOnUser");
-        goto cleanup;
-    }
-
-    impersonating = TRUE;
     si.cb = sizeof(si);
-
     si.lpDesktop = TEXT("Winsta0\\Default");
 
     inheritHandles = FALSE;
@@ -646,8 +642,6 @@ DWORD CreatePipedProcessAsUser(
     status = ERROR_SUCCESS;
 
 cleanup:
-    if (impersonating)
-        RevertToSelf();
     if (pi.hThread)
         CloseHandle(pi.hThread);
     if (userToken)
@@ -693,6 +687,7 @@ DWORD CreateNormalProcessAsCurrentUser(
 
     status = CreatePipedProcessAsCurrentUser(
         commandLine,
+        TRUE,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,
         INVALID_HANDLE_VALUE,

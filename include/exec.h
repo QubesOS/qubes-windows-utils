@@ -47,6 +47,7 @@ DWORD GrantRemoteSessionDesktopAccess(
 WINDOWSUTILS_API
 DWORD CreatePipedProcessAsCurrentUser(
     IN WCHAR *commandLine, // non-const, CreateProcess can modify it
+    IN  BOOL interactive,
     IN HANDLE pipeStdin,
     IN HANDLE pipeStdout,
     IN HANDLE pipeStderr,
@@ -58,7 +59,7 @@ DWORD CreatePipedProcessAsUser(
     IN const WCHAR *userName,
     IN const WCHAR *userPassword,
     IN WCHAR *commandLine, // non-const, CreateProcess can modify it
-    IN BOOL runInteractively,
+    IN  BOOL interactive,
     IN HANDLE pipeStdin,
     IN HANDLE pipeStdout,
     IN HANDLE pipeStderr,
