@@ -16,6 +16,10 @@ extern "C" {
 #    define WINDOWSUTILS_API __declspec(dllimport)
 #endif
 
+// To insulate themselves from Windows' ambiguous path quoting rules,
+// all Qubes Tools components expect command line arguments to be separated by this character.
+#define QUBES_ARGUMENT_SEPARATOR L'|'
+
 #define DESKTOP_ALL (DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW | \
     DESKTOP_CREATEMENU | DESKTOP_HOOKCONTROL | DESKTOP_JOURNALRECORD | \
     DESKTOP_JOURNALPLAYBACK | DESKTOP_ENUMERATE | DESKTOP_WRITEOBJECTS | \
@@ -80,6 +84,10 @@ DWORD CreateNormalProcessAsCurrentUser(
     IN WCHAR *commandLine, // non-const, CreateProcess can modify it
     OUT HANDLE *process
     );
+
+// Call repeatedly to get command line arguments sequentially.
+WINDOWSUTILS_API
+PWSTR GetArgument(void);
 
 #ifdef __cplusplus
 }

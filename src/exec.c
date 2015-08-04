@@ -698,3 +698,43 @@ DWORD CreateNormalProcessAsCurrentUser(
 
     return status;
 }
+
+PWSTR GetArgument(void)
+{
+    static PWCHAR cmd = NULL;
+    static PWCHAR separator;
+
+    if (!cmd) // find the start of arguments
+    {
+        WCHAR searchChar;
+
+        cmd = GetCommandLineW();
+        // Executable path at the start may be enclosed in double quotes.
+        if (*cmd == L'"')
+            searchChar = L'"';
+        else
+            searchChar = L' ';
+
+        for (cmd++; *cmd != searchChar; cmd++)
+            ;
+
+        cmd++;
+        while (*cmd == L' ') // skip remaining spaces, sometimes there's more than one
+            cmd++;
+
+        separator = cmd;
+    }
+
+    if (!separator || *separator == 0) // no arguments left
+        return NULL;
+
+    cmd = separator;
+    separator = wcschr(cmd, QUBES_ARGUMENT_SEPARATOR);
+    if (separator)
+    {
+        *separator = 0;
+        separator++; // move to the next argument
+    }
+
+    return cmd;
+}
