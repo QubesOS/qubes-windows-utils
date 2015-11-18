@@ -60,11 +60,11 @@ extern "C" {
 // Verbosity levels.
 enum
 {
-    LOG_LEVEL_ERROR = 0,    // non-continuable error resulting in process termination
-    LOG_LEVEL_WARNING = 1,  // exceptional condition, but continuable
-    LOG_LEVEL_INFO = 2,     // significant but not erroneous event
-    LOG_LEVEL_DEBUG = 3,    // logging internal state
-    LOG_LEVEL_VERBOSE = 4   // extremely detailed information: entry/exit of all functions etc.
+    LOG_LEVEL_ERROR = 1,    // non-continuable error resulting in process termination
+    LOG_LEVEL_WARNING = 2,  // exceptional condition, but continuable
+    LOG_LEVEL_INFO = 3,     // significant but not erroneous event
+    LOG_LEVEL_DEBUG = 4,    // logging internal state
+    LOG_LEVEL_VERBOSE = 5   // extremely detailed information: entry/exit of all functions etc.
 } LOG_LEVEL;
 
 #define LOG_LEVEL_MIN       LOG_LEVEL_ERROR
