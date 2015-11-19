@@ -39,6 +39,12 @@ extern "C" {
 // Check read/write buffer sizes before initiating transfer to avoid blocking.
 
 WINDOWSUTILS_API
+libvchan_t *VchanInitServer(IN int domain, IN int port, IN size_t bufferSize, IN DWORD timeout);
+
+WINDOWSUTILS_API
+libvchan_t *VchanInitClient(IN int domain, IN int port, IN DWORD timeout);
+
+WINDOWSUTILS_API
 int VchanGetReadBufferSize(IN libvchan_t *vchan);
 
 WINDOWSUTILS_API

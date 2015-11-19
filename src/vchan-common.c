@@ -22,6 +22,48 @@
 #include "vchan-common.h"
 #include "log.h"
 
+libvchan_t *VchanInitServer(IN int domain, IN int port, IN size_t bufferSize, IN DWORD timeout)
+{
+    libvchan_t *vchan;
+    ULONGLONG start = GetTickCount64();
+    ULONGLONG ticks = start;
+
+    LogDebug("domain %d, port %d, buffer %lu, timeout %lu", domain, port, bufferSize, timeout);
+
+    vchan = libvchan_server_init(domain, port, bufferSize, bufferSize);
+
+    while (vchan == NULL && GetLastError() == ERROR_NOT_SUPPORTED && (ticks - start) < timeout)
+    {
+        Sleep(1000);
+        LogDebug("server init failed: 0x%x, retrying", GetLastError());
+        ticks = GetTickCount64();
+        vchan = libvchan_server_init(domain, port, bufferSize, bufferSize);
+    }
+
+    return vchan;
+}
+
+libvchan_t *VchanInitClient(IN int domain, IN int port, IN DWORD timeout)
+{
+    libvchan_t *vchan;
+    ULONGLONG start = GetTickCount64();
+    ULONGLONG ticks = start;
+
+    LogDebug("domain %d, port %d, timeout %lu", domain, port, timeout);
+
+    vchan = libvchan_client_init(domain, port);
+
+    while (vchan == NULL && GetLastError() == ERROR_NOT_SUPPORTED && (ticks - start) < timeout)
+    {
+        Sleep(1000);
+        LogDebug("client init failed: 0x%x, retrying", GetLastError());
+        ticks = GetTickCount64();
+        vchan = libvchan_client_init(domain, port);
+    }
+
+    return vchan;
+}
+
 int VchanGetReadBufferSize(IN libvchan_t *vchan)
 {
     return libvchan_data_ready(vchan);
