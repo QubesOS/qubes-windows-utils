@@ -34,6 +34,7 @@ static BOOL g_LoggerInitialized = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
 static WCHAR g_LogName[CFG_MODULE_MAX] = { 0 };
 static int g_LogLevel = -1; // uninitialized
+static CRITICAL_SECTION g_Lock = { 0 };
 
 #define BUFFER_SIZE (LOG_MAX_MESSAGE_LENGTH * sizeof(WCHAR))
 
@@ -306,6 +307,8 @@ void LogStart(IN const WCHAR *logfilePath OPTIONAL)
 
     if (!g_LoggerInitialized)
     {
+        InitializeCriticalSection(&g_Lock);
+
         if (logfilePath)
         {
             g_LogfileHandle = CreateFile(
@@ -393,6 +396,8 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
     if (!g_LoggerInitialized)
         LogInitDefault(NULL);
+
+    EnterCriticalSection(&g_Lock);
 
     buffer = (WCHAR*) malloc(BUFFER_SIZE);
 
@@ -503,6 +508,7 @@ cleanup:
 #endif
 
     SetLastError(lastError);
+    LeaveCriticalSection(&g_Lock);
 }
 
 // Like _perror, but takes explicit error code. For cases when previous call doesn't set LastError.
