@@ -33,7 +33,7 @@
 typedef struct _PIPE_CLIENT
 {
     LIST_ENTRY ListEntry;
-    DWORD Id;
+    LONGLONG Id;
     HANDLE WritePipe;
     HANDLE ReadPipe;
     CMQ_BUFFER *ReadBuffer;
@@ -53,8 +53,8 @@ typedef struct _PIPE_SERVER
     DWORD InternalBufferSize;
     DWORD WriteTimeout;
     PSECURITY_ATTRIBUTES SecurityAttributes;
-    DWORD NumberClients;
-    DWORD NextClientId;
+    LONGLONG NumberClients;
+    LONGLONG NextClientId;
     LIST_ENTRY Clients;
     BOOL AcceptConnections;
     CRITICAL_SECTION Lock;
@@ -70,7 +70,7 @@ typedef struct _PIPE_SERVER
 struct THREAD_PARAM
 {
     PIPE_SERVER Server;
-    DWORD ClientId;
+    LONGLONG ClientId;
 };
 
 // Initialize data for a newly connected client.
@@ -84,7 +84,7 @@ DWORD QpsConnectClient(
 // wait for them in that case.
 void QpsDisconnectClientInternal(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  BOOL WriterExiting,
     IN  BOOL ReaderExiting
     );
@@ -144,8 +144,8 @@ void QpsDestroy(
     PIPE_SERVER Server
     )
 {
-    DWORD *clientIds;
-    int i;
+    LONGLONG *clientIds;
+    LONGLONG i;
 
     if (!Server)
         return;
@@ -153,7 +153,7 @@ void QpsDestroy(
     // get list of current clients
     EnterCriticalSection(&Server->Lock);
     Server->AcceptConnections = FALSE;
-    clientIds = malloc(Server->NumberClients * sizeof(DWORD));
+    clientIds = malloc(Server->NumberClients * sizeof(clientIds[0]));
 
     i = 0;
     while (!IsListEmpty(&Server->Clients))
@@ -174,22 +174,23 @@ void QpsDestroy(
     DeleteCriticalSection(&Server->Lock);
     ZeroMemory(Server, sizeof(PIPE_SERVER));
     free(Server);
+    free(clientIds);
 
     LogVerbose("done");
 }
 
-static DWORD QpsAllocateClientId(
+static LONGLONG QpsAllocateClientId(
     IN  PIPE_SERVER Server
     )
 {
-    return ++Server->NextClientId;
+    return InterlockedIncrement64(&Server->NextClientId);
 }
 
 // Get client's data by ID and optionally increase the client's refcount.
 // DO NOT USE unless you know EXACTLY why you want to NOT increase the refcount.
 static PPIPE_CLIENT QpsGetClientRaw(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  BOOL IncreaseRefcount
     )
 {
@@ -215,11 +216,11 @@ static PPIPE_CLIENT QpsGetClientRaw(
     {
         if (IncreaseRefcount)
             InterlockedIncrement(&returnClient->RefCount);
-        LogVerbose("[%lu] (%p) refs: %lu", returnClient->Id, returnClient, returnClient->RefCount);
+        LogVerbose("[%lld] (%p) refs: %lu", returnClient->Id, returnClient, returnClient->RefCount);
     }
     else
     {
-        LogVerbose("[%lu] not found", ClientId);
+        LogVerbose("[%lld] not found", ClientId);
     }
 
     return returnClient;
@@ -229,7 +230,7 @@ static PPIPE_CLIENT QpsGetClientRaw(
 // Call QpsReleaseClient after you're done touching the client's data.
 static PPIPE_CLIENT QpsGetClient(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     )
 {
     return QpsGetClientRaw(Server, ClientId, TRUE);
@@ -247,13 +248,13 @@ static void QpsReleaseClient(
     // the global server lock isn't ideal but we would use it anyway to protect access to the client list...
     EnterCriticalSection(&Server->Lock);
     InterlockedDecrement(&Client->RefCount);
-    LogVerbose("[%lu] (%p) refs: %lu", Client->Id, Client, Client->RefCount);
+    LogVerbose("[%lld] (%p) refs: %lu", Client->Id, Client, Client->RefCount);
 
     if (Client->RefCount == 0)
     {
         // Free client's data.
         // This should only occur on disconnection as reader/writer threads always have a ref to client's data.
-        LogDebug("[%lu] freeing client data %p", Client->Id, Client);
+        LogDebug("[%lld] freeing client data %p", Client->Id, Client);
         CmqDestroy(Client->ReadBuffer);
         CmqDestroy(Client->WriteBuffer);
 
@@ -264,7 +265,7 @@ static void QpsReleaseClient(
         ZeroMemory(Client, sizeof(PIPE_CLIENT));
         free(Client);
 
-        InterlockedDecrement(&Server->NumberClients);
+        InterlockedDecrement64(&Server->NumberClients);
     }
     LeaveCriticalSection(&Server->Lock);
 }
@@ -291,7 +292,7 @@ static DWORD WINAPI QpsReaderThread(
     PVOID buffer = malloc(server->PipeBufferSize);
     DWORD transferred;
 
-    LogVerbose("[%lu] (%p) start", client->Id, client);
+    LogVerbose("[%lld] (%p) start", client->Id, client);
     if (!buffer)
     {
         LogError("no memory");
@@ -305,12 +306,12 @@ static DWORD WINAPI QpsReaderThread(
     // Read data is enqueued into the internal buffer.
     while (TRUE)
     {
-        LogVerbose("[%lu] reading...", client->Id);
+        LogVerbose("[%lld] reading...", client->Id);
         // reading will fail even if blocked when we call CancelIo() from QpsDisconnectClient
         if (!ReadFile(pipe, buffer, server->PipeBufferSize, &transferred, NULL)) // this can block
         {
             perror("ReadFile");
-            LogWarning("[%lu] read failed", client->Id);
+            LogWarning("[%lld] read failed", client->Id);
             // disconnect the client if the read failed because of other errors (broken pipe etc), it's harmless if we're already disconnecting
             QpsReleaseClient(server, client);
             QpsDisconnectClientInternal(server, param->ClientId, FALSE, TRUE);
@@ -321,7 +322,7 @@ static DWORD WINAPI QpsReaderThread(
         // disconnect could happen after a successful read but before entering the client lock below
         if (client->Disconnecting)
         {
-            LogWarning("[%lu] client is disconnecting, exiting", client->Id);
+            LogWarning("[%lld] client is disconnecting, exiting", client->Id);
             QpsReleaseClient(server, client);
             free(param);
             free(buffer);
@@ -330,13 +331,13 @@ static DWORD WINAPI QpsReaderThread(
 
         // we have some data from the pipe, add it to the read buffer
         EnterCriticalSection(&client->Lock);
-        LogVerbose("[%lu] read %lu 0x%lx", client->Id, transferred, transferred);
+        LogVerbose("[%lld] read %lu 0x%lx", client->Id, transferred, transferred);
 
         if (!CmqAddData(client->ReadBuffer, buffer, transferred))
         {
             // FIXME: block here until there's space
             LeaveCriticalSection(&client->Lock);
-            LogError("[%lu] read buffer full", client->Id);
+            LogError("[%lld] read buffer full", client->Id);
             QpsReleaseClient(server, client);
             QpsDisconnectClientInternal(server, param->ClientId, FALSE, TRUE);
             free(param);
@@ -378,7 +379,7 @@ static DWORD WINAPI QpsWriterThread(
         if (client->Disconnecting)
         {
             LeaveCriticalSection(&client->Lock);
-            LogWarning("[%lu] client is disconnecting, exiting", client->Id);
+            LogWarning("[%lld] client is disconnecting, exiting", client->Id);
             QpsReleaseClient(server, client);
             free(param);
             free(data);
@@ -401,12 +402,12 @@ static DWORD WINAPI QpsWriterThread(
             }
             LeaveCriticalSection(&client->Lock);
 
-            LogVerbose("[%lu] writing %lu 0x%lx", client->Id, size, size);
+            LogVerbose("[%lld] writing %lu 0x%lx", client->Id, size, size);
             // writing will fail even if blocked when we call CancelIo() from QpsDisconnectClient
             if (!QioWriteBuffer(pipe, data, (DWORD)size)) // this can block
             {
                 perror("QioWriteBuffer");
-                LogWarning("[%lu] write failed", client->Id);
+                LogWarning("[%lld] write failed", client->Id);
                 QpsReleaseClient(server, client);
                 QpsDisconnectClientInternal(server, param->ClientId, TRUE, FALSE);
                 free(param);
@@ -496,7 +497,7 @@ static DWORD QpsConnectClient(
 
     InsertTailList(&Server->Clients, &client->ListEntry);
     Server->NumberClients++;
-    LogInfo("[%lu] (%p) connected (%lu total)", client->Id, client, Server->NumberClients);
+    LogInfo("[%lld] (%p) connected (%lld total)", client->Id, client, Server->NumberClients);
     LeaveCriticalSection(&Server->Lock);
 
     if (Server->ConnectCallback)
@@ -516,12 +517,12 @@ static DWORD QpsConnectClient(
 // DO NOT USE HERE. It will mess up the refcount. Use QpsDisconnectClientInternal directly.
 void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     )
 {
     PPIPE_CLIENT client;
 
-    LogDebug("[%lu]", ClientId);
+    LogDebug("[%lld]", ClientId);
     QpsDisconnectClientInternal(Server, ClientId, FALSE, FALSE);
     // We need to decrease the refcount without increasing it.
     client = QpsGetClientRaw(Server, ClientId, FALSE);
@@ -530,7 +531,7 @@ void QpsDisconnectClient(
 
 static void QpsDisconnectClientInternal(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  BOOL WriterExiting,
     IN  BOOL ReaderExiting
     )
@@ -539,7 +540,7 @@ static void QpsDisconnectClientInternal(
 
     if (!client)
     {
-        LogWarning("[%lu] not connected", ClientId);
+        LogWarning("[%lld] not connected", ClientId);
         return;
     }
 
@@ -550,14 +551,14 @@ static void QpsDisconnectClientInternal(
     }
 
     client->Disconnecting = TRUE;
-    LogInfo("[%lu] (%p) disconnecting, WriterExiting %d, ReaderExiting %d", ClientId, client, WriterExiting, ReaderExiting);
+    LogInfo("[%lld] (%p) disconnecting, WriterExiting %d, ReaderExiting %d", ClientId, client, WriterExiting, ReaderExiting);
 
     if (!WriterExiting)
     {
         // wait for the writer thread to exit
         if (WaitForSingleObject(client->WriterThread, Server->WriteTimeout) != WAIT_OBJECT_0)
         {
-            LogWarning("[%lu] writer thread didn't terminate in time, canceling write", ClientId);
+            LogWarning("[%lld] writer thread didn't terminate in time, canceling write", ClientId);
             if (!CancelIo(client->WritePipe)) // this will abort a blocking operation
                 perror("CancelIo(write)");
         }
@@ -565,12 +566,12 @@ static void QpsDisconnectClientInternal(
         // wait for the writer thread cleanup
         if (WaitForSingleObject(client->WriterThread, 100) != WAIT_OBJECT_0)
         {
-            LogWarning("[%lu] writer thread didn't terminate in time, killing it", ClientId);
+            LogWarning("[%lld] writer thread didn't terminate in time, killing it", ClientId);
             // this may leak memory or do other nasty things but should never happen
             TerminateThread(client->WriterThread, 0);
         }
     }
-    LogDebug("[%lu] (%p) closing write handles", ClientId, client);
+    LogDebug("[%lld] (%p) closing write handles", ClientId, client);
     CloseHandle(client->WriterThread);
     client->WriterThread = NULL;
     CloseHandle(client->WritePipe);
@@ -579,18 +580,18 @@ static void QpsDisconnectClientInternal(
     if (!ReaderExiting)
     {
         // wait for the reader thread to exit
-        LogVerbose("[%lu] (%p) canceling read", ClientId, client);
+        LogVerbose("[%lld] (%p) canceling read", ClientId, client);
         if (!CancelIo(client->ReadPipe)) // this will abort a blocking operation
             perror("CancelIo(read)");
 
         if (WaitForSingleObject(client->ReaderThread, 100) != WAIT_OBJECT_0)
         {
-            LogWarning("[%lu] reader thread didn't terminate in time, killing it", ClientId);
+            LogWarning("[%lld] reader thread didn't terminate in time, killing it", ClientId);
             // this may leak memory or do other nasty things but should never happen
             TerminateThread(client->ReaderThread, 0);
         }
     }
-    LogDebug("[%lu] (%p) closing read handles", ClientId, client);
+    LogDebug("[%lld] (%p) closing read handles", ClientId, client);
     CloseHandle(client->ReaderThread);
     client->ReaderThread = NULL;
     CloseHandle(client->ReadPipe);
@@ -599,7 +600,7 @@ static void QpsDisconnectClientInternal(
     // rest of the client's data will be destroyed by QpsReleaseClient when refcount drops to 0
     QpsReleaseClient(Server, client);
 
-    LogInfo("[%lu] disconnected (%lu total)", ClientId, Server->NumberClients);
+    LogInfo("[%lld] disconnected (%lld total)", ClientId, Server->NumberClients);
 
     if (Server->DisconnectCallback)
         Server->DisconnectCallback(Server, ClientId, Server->UserContext);
@@ -670,7 +671,7 @@ DWORD QpsMainLoop(
 
 DWORD QpsRead(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     OUT void *Data,
     IN  DWORD DataSize
     )
@@ -679,7 +680,7 @@ DWORD QpsRead(
     BOOL ret;
     PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
 
-    LogVerbose("[%lu] size %lu", ClientId, DataSize);
+    LogVerbose("[%lld] size %lu", ClientId, DataSize);
     if (!client)
         return ERROR_NOT_CONNECTED;
 
@@ -699,7 +700,7 @@ DWORD QpsRead(
             if (client->Disconnecting)
             {
                 QpsReleaseClient(Server, client);
-                LogWarning("[%lu] client is disconnected", ClientId);
+                LogWarning("[%lld] client is disconnected", ClientId);
                 return ERROR_BROKEN_PIPE;
             }
 
@@ -713,7 +714,7 @@ DWORD QpsRead(
 
 DWORD QpsWrite(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  const void *Data,
     IN  DWORD DataSize
     )
@@ -721,7 +722,7 @@ DWORD QpsWrite(
     PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
     BOOL ret;
 
-    LogVerbose("[%lu] size %lu", ClientId, DataSize);
+    LogVerbose("[%lld] size %lu", ClientId, DataSize);
     if (!client)
         return ERROR_NOT_CONNECTED;
 
@@ -729,7 +730,7 @@ DWORD QpsWrite(
     {
         // pipe(s) broken, we won't be able to send anything
         QpsReleaseClient(Server, client);
-        LogWarning("[%lu] client is disconnected", ClientId);
+        LogWarning("[%lld] client is disconnected", ClientId);
         return ERROR_BROKEN_PIPE;
     }
 
@@ -742,7 +743,7 @@ DWORD QpsWrite(
     if (!ret)
     {
         QpsReleaseClient(Server, client);
-        LogError("[%lu] write buffer full", ClientId);
+        LogError("[%lld] write buffer full", ClientId);
         return ERROR_BUFFER_OVERFLOW;
     }
 
@@ -752,13 +753,13 @@ DWORD QpsWrite(
 
 DWORD QpsGetReadBufferSize(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     )
 {
     DWORD queuedData;
     PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
 
-    LogVerbose("[%lu]", ClientId);
+    LogVerbose("[%lld]", ClientId);
     if (!client)
         return 0;
 
@@ -771,13 +772,13 @@ DWORD QpsGetReadBufferSize(
 
 DWORD QpsSetClientData(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  PVOID UserData
     )
 {
     PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
 
-    LogVerbose("[%lu]", ClientId);
+    LogVerbose("[%lld]", ClientId);
     if (!client)
         return ERROR_NOT_CONNECTED;
 
@@ -790,13 +791,13 @@ DWORD QpsSetClientData(
 
 PVOID QpsGetClientData(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     )
 {
     PPIPE_CLIENT client = QpsGetClient(Server, ClientId);
     PVOID data;
 
-    LogVerbose("[%lu]", ClientId);
+    LogVerbose("[%lld]", ClientId);
     if (!client)
         return NULL;
 

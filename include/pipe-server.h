@@ -76,13 +76,13 @@ This is a good place to start a thread for the usual processing/state machine.
 This is a blocking call, hence the need for a separate processing thread.
 The server takes care of locking its data.
 */
-typedef void(*QPS_CLIENT_CONNECTED)(struct _PIPE_SERVER *Server, DWORD Id, PVOID Context);
+typedef void(*QPS_CLIENT_CONNECTED)(struct _PIPE_SERVER *Server, LONGLONG Id, PVOID Context);
 
 /*
 Callback invoked after a client has disconnected.
 All client's data is deallocated/invalid at this time.
 */
-typedef void(*QPS_CLIENT_DISCONNECTED)(struct _PIPE_SERVER *Server, DWORD Id, PVOID Context);
+typedef void(*QPS_CLIENT_DISCONNECTED)(struct _PIPE_SERVER *Server, LONGLONG Id, PVOID Context);
 
 /*
 Callback invoked when data has been read from a client.
@@ -90,7 +90,7 @@ Probably not very useful since you can't expect the reads having predictable siz
 Read data is enqueued in FIFO manner in an internal buffer.
 Use QpsRead() for structured, buffered reads.
 */
-typedef void(*QPS_DATA_RECEIVED)(struct _PIPE_SERVER *Server, DWORD Id, PVOID Data, DWORD DataSize, PVOID Context);
+typedef void(*QPS_DATA_RECEIVED)(struct _PIPE_SERVER *Server, LONGLONG Id, PVOID Data, DWORD DataSize, PVOID Context);
 
 // All functions return an error code unless specified otherwise.
 
@@ -127,7 +127,7 @@ DWORD QpsMainLoop(
 WINDOWSUTILS_API
 DWORD QpsRead(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     OUT void *Data,
     IN  DWORD DataSize
     );
@@ -137,7 +137,7 @@ DWORD QpsRead(
 WINDOWSUTILS_API
 DWORD QpsWrite(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  const void *Data,
     IN  DWORD DataSize
     );
@@ -146,7 +146,7 @@ DWORD QpsWrite(
 WINDOWSUTILS_API
 DWORD QpsGetReadBufferSize(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     );
 
 // Cancel all IO, disconnect the client, deallocate client's data.
@@ -154,14 +154,14 @@ DWORD QpsGetReadBufferSize(
 WINDOWSUTILS_API
 void QpsDisconnectClient(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     );
 
 // Assign arbitrary data to the client.
 WINDOWSUTILS_API
 DWORD QpsSetClientData(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId,
+    IN  LONGLONG ClientId,
     IN  PVOID UserData
     );
 
@@ -169,7 +169,7 @@ DWORD QpsSetClientData(
 WINDOWSUTILS_API
 PVOID QpsGetClientData(
     IN  PIPE_SERVER Server,
-    IN  DWORD ClientId
+    IN  LONGLONG ClientId
     );
 
 // Client API: connect to a server.
