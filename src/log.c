@@ -42,6 +42,7 @@ static int g_LogLevel = -1; // uninitialized
 #endif
 
 static WCHAR g_LogLevelChar[] = {
+    L'?',
     L'E',
     L'W',
     L'I',
