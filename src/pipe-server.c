@@ -76,6 +76,7 @@ struct THREAD_PARAM
 // Initialize data for a newly connected client.
 DWORD QpsConnectClient(
     IN  PIPE_SERVER Server,
+    IN  LONGLONG ClientId,
     IN  HANDLE WritePipe,
     IN  HANDLE ReadPipe
     );
@@ -425,6 +426,7 @@ static DWORD WINAPI QpsWriterThread(
 
 static DWORD QpsConnectClient(
     IN  PIPE_SERVER Server,
+    IN  LONGLONG ClientId,
     IN  HANDLE WritePipe,
     IN  HANDLE ReadPipe
     )
@@ -439,7 +441,7 @@ static DWORD QpsConnectClient(
     ZeroMemory(client, sizeof(PIPE_CLIENT));
 
     EnterCriticalSection(&Server->Lock);
-    client->Id = QpsAllocateClientId(Server);
+    client->Id = ClientId;
 
     InitializeCriticalSection(&client->Lock);
 
@@ -616,6 +618,9 @@ DWORD QpsMainLoop(
     DWORD status;
     WCHAR pipeName[256];
     ULONG pid;
+    LONGLONG clientId;
+    DWORD cbPipeName;
+    DWORD written;
 
     while (TRUE)
     {
@@ -631,7 +636,7 @@ DWORD QpsMainLoop(
         // wait for connection
         do
         {
-            LogVerbose("waiting for connection");
+            LogVerbose("waiting for outbound connection, pipe %s", Server->PipeName);
             connected = ConnectNamedPipe(writePipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
             if (!connected)
                 Sleep(10);
@@ -644,7 +649,9 @@ DWORD QpsMainLoop(
             return perror("GetNamedPipeClientProcessId");
         }
 
-        StringCbPrintf(pipeName, sizeof(pipeName), L"%s-%d", Server->PipeName, pid);
+        clientId = QpsAllocateClientId(Server);
+        // create the second pipe with unique name
+        StringCbPrintf(pipeName, sizeof(pipeName), L"%s-%lu-%lld", Server->PipeName, pid, clientId);
         readPipe = CreateNamedPipe(pipeName,
                                    PIPE_ACCESS_INBOUND,
                                    PIPE_TYPE_BYTE | PIPE_WAIT,
@@ -654,8 +661,21 @@ DWORD QpsMainLoop(
                                    0,
                                    Server->SecurityAttributes);
 
+        // send the name to the client
+        cbPipeName = (DWORD) (wcslen(pipeName) + 1) * sizeof(WCHAR);
+        if (!WriteFile(writePipe, &cbPipeName, sizeof(cbPipeName), &written, NULL))
+        {
+            return perror("writing size of inbound pipe name");
+        }
+
+        if (!WriteFile(writePipe, pipeName, cbPipeName, &written, NULL))
+        {
+            return perror("writing name of inbound pipe");
+        }
+
         do
         {
+            LogVerbose("waiting for inbound connection, pipe %s", pipeName);
             connected = ConnectNamedPipe(readPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
             if (!connected)
                 Sleep(10);
@@ -663,7 +683,7 @@ DWORD QpsMainLoop(
         LogVerbose("inbound pipe connected");
 
         // initialize the client
-        status = QpsConnectClient(Server, writePipe, readPipe);
+        status = QpsConnectClient(Server, clientId, writePipe, readPipe);
         if (status != ERROR_SUCCESS)
             return status;
     }
@@ -814,9 +834,10 @@ DWORD QpsConnect(
     OUT HANDLE *WritePipe
     )
 {
-    DWORD pid;
     DWORD status;
     WCHAR writePipeName[256];
+    DWORD cbWritePipeName;
+    DWORD read;
 
     // Try to open the read pipe; wait for it, if necessary.
     do
@@ -843,9 +864,20 @@ DWORD QpsConnect(
         }
     } while (*ReadPipe == INVALID_HANDLE_VALUE);
 
+    // Read the second pipe name from the server.
+    if (!ReadFile(*ReadPipe, &cbWritePipeName, sizeof(cbWritePipeName), &read, NULL))
+    {
+        CloseHandle(*ReadPipe);
+        return perror("reading size of write pipe name");
+    }
+
+    if (!ReadFile(*ReadPipe, writePipeName, cbWritePipeName, &read, NULL))
+    {
+        CloseHandle(*ReadPipe);
+        return perror("reading write pipe name");
+    }
+
     // Try to open the write pipe; wait for it, if necessary.
-    pid = GetCurrentProcessId();
-    StringCbPrintf(writePipeName, sizeof(writePipeName), L"%s-%d", PipeName, pid);
     do
     {
         LogDebug("opening write pipe: %s", writePipeName);
