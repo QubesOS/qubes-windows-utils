@@ -372,8 +372,8 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     WCHAR prefixBuffer[256];
     int prefixLen = 0;
     WCHAR *buffer = NULL;
-    char *newline = "\n";
-#define NEWLINE_LEN 1
+    char *newline = "\r\n";
+#define NEWLINE_LEN 2
     BOOL addNewline = FALSE;
     char *bufferUtf8 = NULL;
     char *prefixBufferUtf8 = NULL;
@@ -424,17 +424,18 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     {
         if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, &prefixBufferUtf8, &prefixBufferSize))
         {
-            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d\n", GetLastError());
+            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d%S", GetLastError(), newline);
             goto cleanup;
         }
     }
 
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &bufferUtf8, &bufferSize))
     {
-        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d\n", GetLastError());
+        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d%S", GetLastError(), newline);
         goto cleanup;
     }
-    if (bufferUtf8[bufferSize - 1] != '\n')
+
+    if (strncmp(newline, &bufferUtf8[bufferSize - NEWLINE_LEN], NEWLINE_LEN) != 0)
         addNewline = TRUE;
 
     if (g_LogfileHandle != INVALID_HANDLE_VALUE)
@@ -443,7 +444,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         {
             if (!WriteFile(g_LogfileHandle, prefixBufferUtf8, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
             {
-                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d\n", GetLastError());
+                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
                 goto cleanup;
             }
         }
@@ -451,7 +452,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         // buffer_size is at most INT_MAX*2
         if (!WriteFile(g_LogfileHandle, bufferUtf8, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
         {
-            fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d\n", GetLastError());
+            fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
             goto cleanup;
         }
 
@@ -459,7 +460,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         {
             if (!WriteFile(g_LogfileHandle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
             {
-                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d\n", GetLastError());
+                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
                 goto cleanup;
             }
         }
