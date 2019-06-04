@@ -19,7 +19,7 @@
  *
  */
 
-#include <Windows.h>
+#include <windows.h>
 #include <strsafe.h>
 
 #include "qubes-string.h"

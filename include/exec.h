@@ -25,7 +25,7 @@
 #include <aclapi.h>
 #include <userenv.h>
 #include <strsafe.h>
-#include <Wtsapi32.h>
+#include <wtsapi32.h>
 
 #ifdef __cplusplus
 extern "C" {

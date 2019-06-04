@@ -19,8 +19,8 @@
  *
  */
 
-#include <Windows.h>
-#include <Shlwapi.h>
+#include <windows.h>
+#include <shlwapi.h>
 #include <strsafe.h>
 
 #include "config.h"

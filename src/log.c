@@ -22,8 +22,8 @@
 #include <windows.h>
 #include <stdlib.h>
 #include <strsafe.h>
-#include <Lmcons.h>
-#include <Shlwapi.h>
+#include <lmcons.h>
+#include <shlwapi.h>
 
 #include "utf8-conv.h"
 #include "log.h"

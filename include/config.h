@@ -20,7 +20,7 @@
  */
 
 #pragma once
-#include <Windows.h>
+#include <windows.h>
 
 #ifdef __cplusplus
 extern "C" {

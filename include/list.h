@@ -21,6 +21,7 @@
 
 #pragma once
 #include <winnt.h>
+#include <driverspecs.h>
 
 // List macros from Windows kernel headers
 
@@ -37,7 +38,7 @@ InitializeListHead(
 
 _Must_inspect_result_
 BOOLEAN
-CFORCEINLINE
+FORCEINLINE
 IsListEmpty(
     _In_ const LIST_ENTRY * ListHead
     )

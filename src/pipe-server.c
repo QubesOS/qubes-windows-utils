@@ -74,7 +74,7 @@ struct THREAD_PARAM
 };
 
 // Initialize data for a newly connected client.
-DWORD QpsConnectClient(
+static DWORD QpsConnectClient(
     IN  PIPE_SERVER Server,
     IN  LONGLONG ClientId,
     IN  HANDLE WritePipe,
@@ -83,7 +83,7 @@ DWORD QpsConnectClient(
 
 // Disconnect can be called from inside worker threads, we don't want to
 // wait for them in that case.
-void QpsDisconnectClientInternal(
+static void QpsDisconnectClientInternal(
     IN  PIPE_SERVER Server,
     IN  LONGLONG ClientId,
     IN  BOOL WriterExiting,

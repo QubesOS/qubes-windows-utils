@@ -41,8 +41,8 @@ typedef struct _SERVICE_CONTEXT
 // since ServiceMain doesn't take any context parameter.
 PSERVICE_CONTEXT g_Service = NULL;
 
-void SvcStop(void);
-void WINAPI SvcMain(DWORD argc, WCHAR *argv[]);
+static void SvcStop(void);
+static void WINAPI SvcMain(DWORD argc, WCHAR *argv[]);
 
 static void SvcSetState(
     IN DWORD state,
