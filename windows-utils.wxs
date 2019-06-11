@@ -1,19 +1,19 @@
 <?xml version='1.0' encoding='windows-1252'?>
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
-
-<?if $(env.DDK_ARCH) = x64 ?>
+    <?if $(env.DDK_ARCH) = x64 ?>
     <?define SYSDIR = System64Folder ?>
-<?else?>
+    <?else?>
     <?define SYSDIR = SystemFolder ?>
-<?endif ?>
-
-<Fragment>
-
-    <DirectoryRef Id='$(var.SYSDIR)'>
-        <Component Id='WindowsUtilsDll' Guid='{B701294F-7A5E-48C8-B1D4-74968E4479D7}'>
-            <File Id='windows_utils.dll' Source='$(env.QUBES_BIN)\windows-utils.dll' KeyPath='yes' />
-        </Component>
-    </DirectoryRef>
-
-</Fragment>
+    <?endif ?>
+    <Fragment>
+        <DirectoryRef Id='$(var.SYSDIR)'>
+            <Component Id='WindowsUtilsDll'
+                       Guid='{B701294F-7A5E-48C8-B1D4-74968E4479D7}'>
+                       
+                <File Id='windows_utils.dll'
+                      Source='$(env.QUBES_BIN)\windows-utils.dll'
+                      KeyPath='yes' />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
 </Wix>
