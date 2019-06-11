@@ -2,38 +2,18 @@
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
 
 <?if $(env.DDK_ARCH) = x64 ?>
-    <?define PFILESDIR = ProgramFiles64Folder ?>
     <?define SYSDIR = System64Folder ?>
 <?else?>
-    <?define PFILESDIR = ProgramFilesFolder ?>
     <?define SYSDIR = SystemFolder ?>
 <?endif ?>
 
-<Module
-Id='WindowsUtils'
-Language='1033'
-Codepage='1252'
-Version='$(env.VERSION)'
->
+<Fragment>
 
-<Package
-Id='{7E495EE5-8003-4B9A-9D45-04C514ED57FA}'
-Description='Qubes shared library'
-Manufacturer='Invisible Things Lab'
-InstallScope='perMachine'
-InstallerVersion='200'
-Languages='1033'
-SummaryCodepage='1252'
-InstallPrivileges='elevated'
-/>
-
-<Directory Id='TARGETDIR' Name='SourceDir'>
-    <Directory Id='$(var.SYSDIR)'>
+    <DirectoryRef Id='$(var.SYSDIR)'>
         <Component Id='WindowsUtilsDll' Guid='{B701294F-7A5E-48C8-B1D4-74968E4479D7}'>
             <File Id='windows_utils.dll' Source='bin\$(env.DDK_ARCH)\windows-utils.dll' KeyPath='yes' />
         </Component>
-    </Directory>
-</Directory>
+    </DirectoryRef>
 
-</Module>
+</Fragment>
 </Wix>
