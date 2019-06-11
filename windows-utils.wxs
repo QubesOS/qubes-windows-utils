@@ -11,7 +11,7 @@
 
     <DirectoryRef Id='$(var.SYSDIR)'>
         <Component Id='WindowsUtilsDll' Guid='{B701294F-7A5E-48C8-B1D4-74968E4479D7}'>
-            <File Id='windows_utils.dll' Source='bin\$(env.DDK_ARCH)\windows-utils.dll' KeyPath='yes' />
+            <File Id='windows_utils.dll' Source='$(env.QUBES_BIN)\windows-utils.dll' KeyPath='yes' />
         </Component>
     </DirectoryRef>
 
