@@ -119,12 +119,12 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
 // Returns last error code.
 WINDOWSUTILS_API
-DWORD _perror(IN const char *functionName, IN const WCHAR *prefix);
-#define perror(prefix) _perror(__FUNCTION__, L##prefix)
+DWORD _win_perror(IN const char *functionName, IN const WCHAR *prefix);
+#define win_perror(prefix) _win_perror(__FUNCTION__, L##prefix)
 
 WINDOWSUTILS_API
-DWORD _perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix);
-#define perror2(error, prefix) _perror2(__FUNCTION__, error, L##prefix)
+DWORD _win_perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix);
+#define win_perror2(error, prefix) _win_perror2(__FUNCTION__, error, L##prefix)
 
 // hex_dump only logs if DEBUG is defined.
 // You can define LOG_NO_HEX_DUMP to disable it even in DEBUG build (it can generate massive log files).

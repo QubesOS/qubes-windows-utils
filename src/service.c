@@ -60,7 +60,7 @@ static void SvcSetState(
         g_Service->Status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | g_Service->AcceptedControlCodes;
 
     if (!SetServiceStatus(g_Service->StatusHandle, &g_Service->Status))
-        perror("SetServiceStatus");
+        win_perror("SetServiceStatus");
 }
 
 DWORD SvcMainLoop(
@@ -98,7 +98,7 @@ DWORD SvcMainLoop(
 
     LogDebug("entering dispatcher loop");
     if (!StartServiceCtrlDispatcher(serviceTable))
-        return perror("StartServiceCtrlDispatcher");
+        return win_perror("StartServiceCtrlDispatcher");
 
     LogDebug("exiting");
     return ERROR_SUCCESS;
@@ -142,7 +142,7 @@ static DWORD WINAPI SvcCtrlHandlerEx(
         status = g_Service->HandlerFunction(controlCode, eventType, eventData, context);
         if (NO_ERROR != status)
         {
-            perror2(status, "user notification handler");
+            win_perror2(status, "user notification handler");
             SvcStop();
         }
         break;
@@ -160,7 +160,7 @@ static void WINAPI SvcMain(DWORD argc, WCHAR *argv[])
     g_Service->StatusHandle = RegisterServiceCtrlHandlerEx(g_Service->Name, SvcCtrlHandlerEx, g_Service);
     if (!g_Service->StatusHandle)
     {
-        perror("RegisterServiceCtrlHandlerEx");
+        win_perror("RegisterServiceCtrlHandlerEx");
         return;
     }
 
@@ -170,7 +170,7 @@ static void WINAPI SvcMain(DWORD argc, WCHAR *argv[])
     g_Service->StopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (!g_Service->StopEvent)
     {
-        status = perror("Create stop event");
+        status = win_perror("Create stop event");
         SvcSetState(SERVICE_STOPPED, status);
         return;
     }
@@ -179,7 +179,7 @@ static void WINAPI SvcMain(DWORD argc, WCHAR *argv[])
     g_Service->WorkerThread = CreateThread(NULL, 0, g_Service->WorkerFunction, &g_Service->WorkerContext, 0, NULL);
     if (!g_Service->WorkerThread)
     {
-        status = perror("Create worker thread");
+        status = win_perror("Create worker thread");
         CloseHandle(g_Service->StopEvent);
         SvcSetState(SERVICE_STOPPED, status);
         return;
@@ -222,7 +222,7 @@ DWORD SvcCreate(
     scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
     if (!scm)
     {
-        status = perror("OpenSCManager");
+        status = win_perror("OpenSCManager");
         goto cleanup;
     }
 
@@ -243,7 +243,7 @@ DWORD SvcCreate(
 
     if (!service)
     {
-        status = perror("CreateService");
+        status = win_perror("CreateService");
         goto cleanup;
     }
 
@@ -275,20 +275,20 @@ DWORD SvcDelete(
     scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
     if (!scm)
     {
-        status = perror("OpenSCManager");
+        status = win_perror("OpenSCManager");
         goto cleanup;
     }
 
     service = OpenService(scm, serviceName, SERVICE_STOP | SERVICE_QUERY_STATUS | DELETE);
     if (!service)
     {
-        status = perror("OpenService");
+        status = win_perror("OpenService");
         goto cleanup;
     }
 
     if (!DeleteService(service))
     {
-        status = perror("DeleteService");
+        status = win_perror("DeleteService");
         goto cleanup;
     }
 

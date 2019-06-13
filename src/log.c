@@ -202,7 +202,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
         if (GetLastError() != ERROR_ALREADY_EXISTS)
         {
             LogStart(NULL);
-            perror("CreateDirectory");
+            win_perror("CreateDirectory");
             LogWarning("failed to create %s\n", logDir);
             goto fallback;
         }
@@ -232,7 +232,7 @@ fallback:
     len = UNLEN;
     if (!GetUserName(buffer, &len))
     {
-        perror("GetUserName");
+        win_perror("GetUserName");
         LogInfo("Running as user: <UNKNOWN>, process ID: %d\n", GetCurrentProcessId());
     }
     else
@@ -512,15 +512,15 @@ cleanup:
     LeaveCriticalSection(&g_Lock);
 }
 
-// Like _perror, but takes explicit error code. For cases when previous call doesn't set LastError.
-DWORD _perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix)
+// Like _win_perror, but takes explicit error code. For cases when previous call doesn't set LastError.
+DWORD _win_perror2(IN const char *functionName, IN DWORD errorCode, IN const WCHAR *prefix)
 {
     SetLastError(errorCode);
-    return _perror(functionName, prefix);
+    return _win_perror(functionName, prefix);
 }
 
-// Helper function to report errors. Similar to perror, but uses GetLastError() instead of errno.
-DWORD _perror(IN const char *functionName, IN const WCHAR *prefix)
+// Helper function to report errors. Similar to win_perror, but uses GetLastError() instead of errno.
+DWORD _win_perror(IN const char *functionName, IN const WCHAR *prefix)
 {
     size_t charCount;
     WCHAR *message = NULL;

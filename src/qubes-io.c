@@ -31,7 +31,7 @@ BOOL QioWriteBuffer(IN HANDLE file, IN const void *buffer, IN DWORD bufferSize)
     {
         if (!WriteFile(file, (BYTE *) buffer + cbWrittenTotal, bufferSize - cbWrittenTotal, &cbWritten, NULL))
         {
-            perror("WriteFile");
+            win_perror("WriteFile");
             return FALSE;
         }
         cbWrittenTotal += cbWritten;
@@ -48,7 +48,7 @@ BOOL QioReadBuffer(IN HANDLE file, OUT void *buffer, IN DWORD bufferSize)
     {
         if (!ReadFile(file, (BYTE *)buffer + cbReadTotal, bufferSize - cbReadTotal, &cbRead, NULL))
         {
-            perror("ReadFile");
+            win_perror("ReadFile");
             return FALSE;
         }
 

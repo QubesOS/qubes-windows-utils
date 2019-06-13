@@ -52,14 +52,14 @@ DWORD GetAccountSid(
         status = GetLastError();
         if (ERROR_INSUFFICIENT_BUFFER != status)
         {
-            return perror("LookupAccountName");
+            return win_perror("LookupAccountName");
         }
     }
 
     *sid = LocalAlloc(LPTR, cbSid);
     if (*sid == NULL)
     {
-        return perror("LocalAlloc");
+        return win_perror("LocalAlloc");
     }
 
     if (!LookupAccountName(
@@ -73,7 +73,7 @@ DWORD GetAccountSid(
     {
         status = GetLastError();
         LocalFree(*sid);
-        return perror2(status, "LookupAccountName");
+        return win_perror2(status, "LookupAccountName");
     }
 
     return ERROR_SUCCESS;
@@ -106,14 +106,14 @@ DWORD GetObjectSecurityDescriptorDacl(
         status = GetLastError();
         if (ERROR_INSUFFICIENT_BUFFER != status)
         {
-            return perror("GetUserObjectSecurity");
+            return win_perror("GetUserObjectSecurity");
         }
     }
 
     *sd = LocalAlloc(LPTR, sizeNeeded);
     if (*sd == NULL)
     {
-        return perror("LocalAlloc");
+        return win_perror("LocalAlloc");
     }
 
     if (!GetUserObjectSecurity(
@@ -123,14 +123,14 @@ DWORD GetObjectSecurityDescriptorDacl(
         sizeNeeded,
         &sizeNeeded))
     {
-        return perror("GetUserObjectSecurity");
+        return win_perror("GetUserObjectSecurity");
     }
 
     if (!GetSecurityDescriptorDacl(*sd, daclPresent, dacl, &daclDefaulted))
     {
         status = GetLastError();
         LocalFree(*sd);
-        return perror2(status, "GetSecurityDescriptorDacl");
+        return win_perror2(status, "GetSecurityDescriptorDacl");
     }
 
     return ERROR_SUCCESS;
@@ -155,7 +155,7 @@ DWORD MergeWithExistingDacl(
     status = GetObjectSecurityDescriptorDacl(object, &sd, &daclPresent, &dacl);
     if (ERROR_SUCCESS != status)
     {
-        perror("GetObjectSecurityDescriptorDacl");
+        win_perror("GetObjectSecurityDescriptorDacl");
         goto cleanup;
     }
 
@@ -163,32 +163,32 @@ DWORD MergeWithExistingDacl(
 
     if (ERROR_SUCCESS != status)
     {
-        perror("SetEntriesInAcl");
+        win_perror("SetEntriesInAcl");
         goto cleanup;
     }
 
     sd = LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
     if (!sd)
     {
-        status = perror("LocalAlloc");
+        status = win_perror("LocalAlloc");
         goto cleanup;
     }
 
     if (!InitializeSecurityDescriptor(sd, SECURITY_DESCRIPTOR_REVISION))
     {
-        status = perror("InitializeSecurityDescriptor");
+        status = win_perror("InitializeSecurityDescriptor");
         goto cleanup;
     }
 
     if (!SetSecurityDescriptorDacl(sd, TRUE, newAcl, FALSE))
     {
-        status = perror("SetSecurityDescriptorDacl");
+        status = win_perror("SetSecurityDescriptorDacl");
         goto cleanup;
     }
 
     if (!SetUserObjectSecurity(object, &siRequested, sd))
     {
-        status = perror("SetUserObjectSecurity");
+        status = win_perror("SetUserObjectSecurity");
         goto cleanup;
     }
 
@@ -221,7 +221,7 @@ DWORD GrantDesktopAccess(
     originalWindowStation = GetProcessWindowStation();
     if (!originalWindowStation)
     {
-        return perror("GetProcessWindowStation");
+        return win_perror("GetProcessWindowStation");
     }
 
     windowStation = OpenWindowStation(
@@ -231,12 +231,12 @@ DWORD GrantDesktopAccess(
 
     if (!windowStation)
     {
-        return perror("OpenWindowStation");
+        return win_perror("OpenWindowStation");
     }
 
     if (!SetProcessWindowStation(windowStation))
     {
-        status = perror("SetProcessWindowStation");
+        status = win_perror("SetProcessWindowStation");
         goto cleanup;
     }
 
@@ -248,20 +248,20 @@ DWORD GrantDesktopAccess(
 
     if (!desktop)
     {
-        status = perror("OpenDesktop");
+        status = win_perror("OpenDesktop");
         goto cleanup;
     }
 
     if (!SetProcessWindowStation(originalWindowStation))
     {
-        status = perror("SetProcessWindowStation(Original)");
+        status = win_perror("SetProcessWindowStation(Original)");
         goto cleanup;
     }
 
     status = GetAccountSid(accountName, systemName, &sid);
     if (ERROR_SUCCESS != status)
     {
-        perror2(status, "GetAccountSid");
+        win_perror2(status, "GetAccountSid");
         goto cleanup;
     }
 
@@ -281,7 +281,7 @@ DWORD GrantDesktopAccess(
     status = MergeWithExistingDacl(windowStation, 2, newEa);
     if (ERROR_SUCCESS != status)
     {
-        perror2(status, "MergeWithExistingDacl(WindowStation)");
+        win_perror2(status, "MergeWithExistingDacl(WindowStation)");
         goto cleanup;
     }
 
@@ -292,7 +292,7 @@ DWORD GrantDesktopAccess(
     status = MergeWithExistingDacl(desktop, 1, newEa);
     if (ERROR_SUCCESS != status)
     {
-        perror2(status, "MergeWithExistingDacl(Desktop)");
+        win_perror2(status, "MergeWithExistingDacl(Desktop)");
         goto cleanup;
     }
 
@@ -328,7 +328,7 @@ DWORD GrantRemoteSessionDesktopAccess(
 
     if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
     {
-        return perror("ProcessIdToSessionId");
+        return win_perror("ProcessIdToSessionId");
     }
 
     if (currentSessionId == sessionId)
@@ -337,7 +337,7 @@ DWORD GrantRemoteSessionDesktopAccess(
         LogInfo("Already running in the specified session");
         status = GrantDesktopAccess(accountName, systemName);
         if (ERROR_SUCCESS != status)
-            perror2(status, "GrantDesktopAccess");
+            win_perror2(status, "GrantDesktopAccess");
 
         return status;
     }
@@ -346,7 +346,7 @@ DWORD GrantRemoteSessionDesktopAccess(
     {
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token))
         {
-            return perror("OpenProcessToken");
+            return win_perror("OpenProcessToken");
         }
     }
 
@@ -358,7 +358,7 @@ DWORD GrantRemoteSessionDesktopAccess(
         TokenPrimary,
         &tokenDuplicate))
     {
-        status = perror("DuplicateTokenEx");
+        status = win_perror("DuplicateTokenEx");
         goto cleanup;
     }
 
@@ -367,13 +367,13 @@ DWORD GrantRemoteSessionDesktopAccess(
 
     if (!SetTokenInformation(token, TokenSessionId, &sessionId, sizeof(sessionId)))
     {
-        status = perror("SetTokenInformation");
+        status = win_perror("SetTokenInformation");
         goto cleanup;
     }
 
     if (!GetModuleFileName(NULL, fullPath, RTL_NUMBER_OF(fullPath) - 1))
     {
-        status = perror("GetModuleFileName");
+        status = win_perror("GetModuleFileName");
         goto cleanup;
     }
 
@@ -401,7 +401,7 @@ DWORD GrantRemoteSessionDesktopAccess(
         &si,
         &pi))
     {
-        status = perror("CreateProcessAsUser");
+        status = win_perror("CreateProcessAsUser");
         goto cleanup;
     }
 
@@ -416,7 +416,7 @@ DWORD GrantRemoteSessionDesktopAccess(
         }
         else
         {
-            status = perror("WaitForSingleObject");
+            status = win_perror("WaitForSingleObject");
         }
     }
 
@@ -461,7 +461,7 @@ HANDLE GetLoggedOnUserToken(
         TokenPrimary,
         &duplicateToken))
     {
-        perror("DuplicateTokenEx");
+        win_perror("DuplicateTokenEx");
         CloseHandle(userToken);
         return NULL;
     }
@@ -470,14 +470,14 @@ HANDLE GetLoggedOnUserToken(
 
     if (!ImpersonateLoggedOnUser(duplicateToken))
     {
-        perror("ImpersonateLoggedOnUser");
+        win_perror("ImpersonateLoggedOnUser");
         CloseHandle(duplicateToken);
         return NULL;
     }
 
     if (!GetUserName(userName, &cchUserName))
     {
-        perror("GetUserName");
+        win_perror("GetUserName");
         userName[0] = 0;
     }
 
@@ -528,7 +528,7 @@ DWORD CreatePipedProcessAsUser(
     LogDebug("user '%s', cmd '%s', interactive %d", userName, commandLine, interactive);
 
     if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
-        return perror("get current session id");
+        return win_perror("get current session id");
 
     consoleSessionId = WTSGetActiveConsoleSessionId();
     if (0xFFFFFFFF == consoleSessionId)
@@ -544,7 +544,7 @@ DWORD CreatePipedProcessAsUser(
         HANDLE duplicateToken;
 
         if (!OpenProcessToken(GetCurrentProcess(), MAXIMUM_ALLOWED, &userToken))
-            return perror("open current process token");
+            return win_perror("open current process token");
 
         // create a new primary token
         if (!DuplicateTokenEx(
@@ -555,7 +555,7 @@ DWORD CreatePipedProcessAsUser(
             TokenPrimary,
             &duplicateToken))
         {
-            status = perror("create new primary token for current user");
+            status = win_perror("create new primary token for current user");
             CloseHandle(userToken);
             return status;
         }
@@ -589,7 +589,7 @@ DWORD CreatePipedProcessAsUser(
                 LOGON32_PROVIDER_DEFAULT,
                 &userToken))
             {
-                status = perror("LogonUser");
+                status = win_perror("LogonUser");
                 goto cleanup;
             }
         }
@@ -601,7 +601,7 @@ DWORD CreatePipedProcessAsUser(
 
     if (!SetTokenInformation(userToken, TokenSessionId, &consoleSessionId, sizeof(consoleSessionId)))
     {
-        status = perror("set token session id");
+        status = win_perror("set token session id");
         goto cleanup;
     }
 
@@ -614,12 +614,12 @@ DWORD CreatePipedProcessAsUser(
         /*
         status = GrantRemoteSessionDesktopAccess(consoleSessionId, userName, NULL);
         if (ERROR_SUCCESS != status)
-        perror2(status, "GrantRemoteSessionDesktopAccess");*/
+        win_perror2(status, "GrantRemoteSessionDesktopAccess");*/
     }
 
     if (!CreateEnvironmentBlock(&environment, userToken, TRUE))
     {
-        status = perror("CreateEnvironmentBlock");
+        status = win_perror("CreateEnvironmentBlock");
         goto cleanup;
     }
 
@@ -653,7 +653,7 @@ DWORD CreatePipedProcessAsUser(
         &si,
         &pi))
     {
-        status = perror("CreateProcessAsUser");
+        status = win_perror("CreateProcessAsUser");
         goto cleanup;
     }
 
@@ -694,7 +694,7 @@ DWORD CreateNormalProcessAsUser(
         process);
 
     if (ERROR_SUCCESS != status)
-        perror2(status, "CreatePipedProcessAsUser");
+        win_perror2(status, "CreatePipedProcessAsUser");
 
     return status;
 }
@@ -715,7 +715,7 @@ DWORD CreateNormalProcessAsCurrentUser(
         process);
 
     if (ERROR_SUCCESS != status)
-        perror2(status, "CreatePipedProcessAsCurrentUser");
+        win_perror2(status, "CreatePipedProcessAsCurrentUser");
 
     return status;
 }
@@ -784,7 +784,7 @@ DWORD CreatePublicPipeSecurityDescriptor(
         0, 0, 0, 0, 0, 0, 0,
         &everyoneSid))
     {
-        return perror("AllocateAndInitializeSid");
+        return win_perror("AllocateAndInitializeSid");
     }
 
     *acl = NULL;
@@ -804,7 +804,7 @@ DWORD CreatePublicPipeSecurityDescriptor(
 
     if (ERROR_SUCCESS != status)
     {
-        perror2(status, "SetEntriesInAcl");
+        win_perror2(status, "SetEntriesInAcl");
         goto cleanup;
     }
 
@@ -812,20 +812,20 @@ DWORD CreatePublicPipeSecurityDescriptor(
     *securityDescriptor = (SECURITY_DESCRIPTOR *)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
     if (*securityDescriptor == NULL)
     {
-        perror("LocalAlloc");
+        win_perror("LocalAlloc");
         goto cleanup;
     }
 
     if (!InitializeSecurityDescriptor(*securityDescriptor, SECURITY_DESCRIPTOR_REVISION))
     {
-        status = perror("InitializeSecurityDescriptor");
+        status = win_perror("InitializeSecurityDescriptor");
         goto cleanup;
     }
 
     // Add the ACL to the security descriptor.
     if (!SetSecurityDescriptorDacl(*securityDescriptor, TRUE, *acl, FALSE))
     {
-        status = perror("SetSecurityDescriptorDacl");
+        status = win_perror("SetSecurityDescriptorDacl");
         goto cleanup;
     }
 

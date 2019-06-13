@@ -311,7 +311,7 @@ static DWORD WINAPI QpsReaderThread(
         // reading will fail even if blocked when we call CancelIo() from QpsDisconnectClient
         if (!ReadFile(pipe, buffer, server->PipeBufferSize, &transferred, NULL)) // this can block
         {
-            perror("ReadFile");
+            win_perror("ReadFile");
             LogWarning("[%lld] read failed", client->Id);
             // disconnect the client if the read failed because of other errors (broken pipe etc), it's harmless if we're already disconnecting
             QpsReleaseClient(server, client);
@@ -407,7 +407,7 @@ static DWORD WINAPI QpsWriterThread(
             // writing will fail even if blocked when we call CancelIo() from QpsDisconnectClient
             if (!QioWriteBuffer(pipe, data, (DWORD)size)) // this can block
             {
-                perror("QioWriteBuffer");
+                win_perror("QioWriteBuffer");
                 LogWarning("[%lld] write failed", client->Id);
                 QpsReleaseClient(server, client);
                 QpsDisconnectClientInternal(server, param->ClientId, TRUE, FALSE);
@@ -562,7 +562,7 @@ static void QpsDisconnectClientInternal(
         {
             LogWarning("[%lld] writer thread didn't terminate in time, canceling write", ClientId);
             if (!CancelIo(client->WritePipe)) // this will abort a blocking operation
-                perror("CancelIo(write)");
+                win_perror("CancelIo(write)");
         }
 
         // wait for the writer thread cleanup
@@ -584,7 +584,7 @@ static void QpsDisconnectClientInternal(
         // wait for the reader thread to exit
         LogVerbose("[%lld] (%p) canceling read", ClientId, client);
         if (!CancelIo(client->ReadPipe)) // this will abort a blocking operation
-            perror("CancelIo(read)");
+            win_perror("CancelIo(read)");
 
         if (WaitForSingleObject(client->ReaderThread, 100) != WAIT_OBJECT_0)
         {
@@ -646,7 +646,7 @@ DWORD QpsMainLoop(
         // prepare the read pipe
         if (!GetNamedPipeClientProcessId(writePipe, &pid))
         {
-            return perror("GetNamedPipeClientProcessId");
+            return win_perror("GetNamedPipeClientProcessId");
         }
 
         clientId = QpsAllocateClientId(Server);
@@ -665,12 +665,12 @@ DWORD QpsMainLoop(
         cbPipeName = (DWORD) (wcslen(pipeName) + 1) * sizeof(WCHAR);
         if (!WriteFile(writePipe, &cbPipeName, sizeof(cbPipeName), &written, NULL))
         {
-            return perror("writing size of inbound pipe name");
+            return win_perror("writing size of inbound pipe name");
         }
 
         if (!WriteFile(writePipe, pipeName, cbPipeName, &written, NULL))
         {
-            return perror("writing name of inbound pipe");
+            return win_perror("writing name of inbound pipe");
         }
 
         do
@@ -856,11 +856,11 @@ DWORD QpsConnect(
         if (*ReadPipe == INVALID_HANDLE_VALUE)
         {
             if (ERROR_PIPE_BUSY != status)
-                return perror("open read pipe");
+                return win_perror("open read pipe");
 
             // Wait until the pipe is available.
             if (!WaitNamedPipe(PipeName, NMPWAIT_WAIT_FOREVER))
-                return perror("WaitNamedPipe(read)");
+                return win_perror("WaitNamedPipe(read)");
         }
     } while (*ReadPipe == INVALID_HANDLE_VALUE);
 
@@ -868,13 +868,13 @@ DWORD QpsConnect(
     if (!ReadFile(*ReadPipe, &cbWritePipeName, sizeof(cbWritePipeName), &read, NULL))
     {
         CloseHandle(*ReadPipe);
-        return perror("reading size of write pipe name");
+        return win_perror("reading size of write pipe name");
     }
 
     if (!ReadFile(*ReadPipe, writePipeName, cbWritePipeName, &read, NULL))
     {
         CloseHandle(*ReadPipe);
-        return perror("reading write pipe name");
+        return win_perror("reading write pipe name");
     }
 
     // Try to open the write pipe; wait for it, if necessary.
@@ -892,7 +892,7 @@ DWORD QpsConnect(
         // This pipe may be not created yet
         status = GetLastError();
         if ((*WritePipe == INVALID_HANDLE_VALUE) && (ERROR_FILE_NOT_FOUND != status))
-            return perror("open write pipe");
+            return win_perror("open write pipe");
 
         Sleep(10);
     } while (*WritePipe == INVALID_HANDLE_VALUE);
