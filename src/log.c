@@ -137,10 +137,13 @@ static WCHAR *LogGetName(void)
 static void LogReadLevel(void)
 {
     DWORD status;
-    status = CfgReadDword(LogGetName(), LOG_CONFIG_LEVEL_VALUE, &g_LogLevel, NULL);
+    DWORD logLevel;
+    status = CfgReadDword(LogGetName(), LOG_CONFIG_LEVEL_VALUE, &logLevel, NULL);
 
     if (status != ERROR_SUCCESS)
         g_LogLevel = LOG_LEVEL_INFO; // default
+    else
+        g_LogLevel = logLevel;
 }
 
 // Explicitly set verbosity level.
