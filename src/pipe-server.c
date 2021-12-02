@@ -311,7 +311,7 @@ static DWORD WINAPI QpsReaderThread(
         // reading will fail even if blocked when we call CancelIo() from QpsDisconnectClient
         if (!ReadFile(pipe, buffer, server->PipeBufferSize, &transferred, NULL)) // this can block
         {
-            win_perror("ReadFile");
+            // win_perror("ReadFile");
             LogWarning("[%lld] read failed", client->Id);
             // disconnect the client if the read failed because of other errors (broken pipe etc), it's harmless if we're already disconnecting
             QpsReleaseClient(server, client);
@@ -407,7 +407,7 @@ static DWORD WINAPI QpsWriterThread(
             // writing will fail even if blocked when we call CancelIo() from QpsDisconnectClient
             if (!QioWriteBuffer(pipe, data, (DWORD)size)) // this can block
             {
-                win_perror("QioWriteBuffer");
+                // win_perror("QioWriteBuffer");
                 LogWarning("[%lld] write failed", client->Id);
                 QpsReleaseClient(server, client);
                 QpsDisconnectClientInternal(server, param->ClientId, TRUE, FALSE);
@@ -856,11 +856,18 @@ DWORD QpsConnect(
         if (*ReadPipe == INVALID_HANDLE_VALUE)
         {
             if (ERROR_PIPE_BUSY != status)
-                return win_perror("open read pipe");
+            {
+                LogDebug("open read pipe failed, code: %d", (int)status);
+                return status; // win_perror("open read pipe");
+            }
 
             // Wait until the pipe is available.
             if (!WaitNamedPipe(PipeName, NMPWAIT_WAIT_FOREVER))
-                return win_perror("WaitNamedPipe(read)");
+            {
+                status = GetLastError();
+                LogDebug("WaitNamedPipe(read) failed, status: %s", (int)status);
+                return status; // win_perror("WaitNamedPipe(read)");
+            }
         }
     } while (*ReadPipe == INVALID_HANDLE_VALUE);
 
