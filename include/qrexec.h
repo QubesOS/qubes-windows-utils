@@ -58,6 +58,10 @@ enum
      * struct trigger_service_params passed as data */
     MSG_TRIGGER_SERVICE = 0x210,
 
+    /* connection was terminated, struct exec_params passed as data (with empty
+     * cmdline field) informs about released vchan port */
+    MSG_CONNECTION_TERMINATED,
+
     /* common messages */
     /* initialize connection, struct peer_info passed as data
      * should be sent as the first message (server first, then client) */
