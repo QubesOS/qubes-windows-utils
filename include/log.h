@@ -65,7 +65,7 @@ enum
     LOG_LEVEL_INFO = 3,     // significant but not erroneous event
     LOG_LEVEL_DEBUG = 4,    // logging internal state
     LOG_LEVEL_VERBOSE = 5   // extremely detailed information: entry/exit of all functions etc.
-} LOG_LEVEL;
+};
 
 #define LOG_LEVEL_MIN       LOG_LEVEL_ERROR
 #define LOG_LEVEL_MAX       LOG_LEVEL_VERBOSE
