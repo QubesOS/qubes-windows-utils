@@ -141,7 +141,7 @@ static void LogReadLevel(void)
     status = CfgReadDword(LogGetName(), LOG_CONFIG_LEVEL_VALUE, &logLevel, NULL);
 
     if (status != ERROR_SUCCESS)
-        g_LogLevel = LOG_LEVEL_INFO; // default
+        g_LogLevel = LOG_LEVEL_DEFAULT;
     else
         g_LogLevel = logLevel;
 }
