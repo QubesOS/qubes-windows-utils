@@ -38,6 +38,10 @@ static LONG WINAPI ErrUEF(EXCEPTION_POINTERS *ep)
 
     // TODO: stack trace
 
+#ifdef _DEBUG
+    DebugBreak();
+#endif
+
     return EXCEPTION_EXECUTE_HANDLER; // terminate
 }
 
