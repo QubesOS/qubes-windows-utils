@@ -175,7 +175,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     DWORD sessionId;
 
     if (g_LogLevel < 0)
-        g_LogLevel = LOG_LEVEL_INFO; // default
+        g_LogLevel = LOG_LEVEL_DEFAULT;
 
     StringCchCopy(g_LogName, RTL_NUMBER_OF(g_LogName), logName);
     GetLocalTime(&st);
