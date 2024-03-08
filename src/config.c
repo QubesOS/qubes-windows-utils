@@ -68,6 +68,11 @@ static DWORD CfgOpenKey(IN const WCHAR *moduleName OPTIONAL, OUT HKEY *key, IN c
         StringCchPrintf(keyPath, RTL_NUMBER_OF(keyPath), L"%s\\%s", REG_CONFIG_KEY, moduleName);
 
         SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ | KEY_WRITE, key));
+        if (status == ERROR_ACCESS_DENIED) // try read-only
+        {
+            SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ, key));
+        }
+
         if (status == ERROR_SUCCESS)
         {
             // Check if the requested value exists.
@@ -83,6 +88,10 @@ static DWORD CfgOpenKey(IN const WCHAR *moduleName OPTIONAL, OUT HKEY *key, IN c
 
     // Open root key.
     SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ | KEY_WRITE, key));
+    if (status == ERROR_ACCESS_DENIED)
+    {
+        SetLastError(status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, REG_CONFIG_KEY, 0, KEY_READ, key));
+    }
     return status;
 }
 
