@@ -166,6 +166,9 @@ void LogSetLevel(IN int level)
 
 int LogGetLevel(void)
 {
+    if (g_LogLevel < 0)
+        LogReadLevel();
+
     return g_LogLevel;
 }
 
