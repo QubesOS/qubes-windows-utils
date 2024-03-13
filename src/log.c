@@ -67,6 +67,11 @@ static DWORD GetCurrentModuleVersion(OUT DWORD *versionMajor, OUT DWORD *version
         goto cleanup;
 
     versionBuffer = malloc(cbVersion);
+    if (!versionBuffer)
+    {
+        SetLastError(ERROR_OUTOFMEMORY);
+        goto cleanup;
+    }
 
     if (!GetFileVersionInfo(currentModulePath, 0, cbVersion, versionBuffer))
         goto cleanup;
@@ -417,6 +422,11 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     EnterCriticalSection(&g_Lock);
 
     buffer = (WCHAR*) malloc(BUFFER_SIZE);
+    if (!buffer)
+    {
+        SetLastError(ERROR_OUTOFMEMORY);
+        goto cleanup;
+    }
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
