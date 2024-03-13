@@ -56,7 +56,7 @@ extern "C" {
 #define LOG_DEFAULT_RETENTION_TIME (7*24*60*60ULL)
 
 // Default log directory (prepend "%SYSTEMDRIVE%\")
-#define LOG_DEFAULT_DIR L"QubesLogs"
+#define LOG_DEFAULT_DIR L"Qubes Logs"
 
 // Verbosity levels.
 enum
