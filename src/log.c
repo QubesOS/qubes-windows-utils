@@ -31,6 +31,7 @@
 #include "error.h"
 
 static BOOL g_LoggerInitialized = FALSE;
+static BOOL g_SafeFlush = FALSE;
 static HANDLE g_LogfileHandle = INVALID_HANDLE_VALUE;
 static WCHAR g_LogName[CFG_MODULE_MAX] = { 0 };
 static int g_LogLevel = -1; // uninitialized
@@ -296,7 +297,7 @@ DWORD LogInitDefault(IN const WCHAR *logName OPTIONAL)
         LogInit(logPath, logName);
     }
 
-    LogInfo("Verbosity level set to %d", g_LogLevel);
+    LogDebug("Verbosity level set to %d, safe flush: %d", g_LogLevel, g_SafeFlush);
 
     return status;
 }
@@ -355,6 +356,19 @@ fallback:
     {
         CloseHandle(g_LogfileHandle);
         g_LogfileHandle = INVALID_HANDLE_VALUE;
+    }
+
+    if (g_LogfileHandle != INVALID_HANDLE_VALUE)
+    {
+        DWORD safeFlush;
+        if (CfgReadDword(g_LogName, LOG_CONFIG_FLUSH_VALUE, &safeFlush, NULL) == ERROR_SUCCESS)
+        {
+            g_SafeFlush = (safeFlush != 0);
+        }
+        else
+        {
+            g_SafeFlush = FALSE;
+        }
     }
 
     g_LoggerInitialized = TRUE;

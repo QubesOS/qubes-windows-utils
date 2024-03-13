@@ -35,8 +35,6 @@ extern "C" {
 // To override CRT's perror definition.
 #define _CRT_PERROR_DEFINED
 
-// If LOG_SAFE_FLUSH is defined, the log file is flushed after every log call. (TODO: registry config)
-
 // Underscore functions are meant for internal use.
 
 // Registry config value: Log directory.
@@ -47,6 +45,9 @@ extern "C" {
 
 // Registry config value: Log retention time (seconds).
 #define LOG_CONFIG_RETENTION_VALUE L"LogRetention"
+
+// Registry config value: Flush the log file after every line.
+#define LOG_CONFIG_FLUSH_VALUE L"LogSafeFlush"
 
 // Size of internal buffer in WCHARs.
 #define LOG_MAX_MESSAGE_LENGTH 65536
