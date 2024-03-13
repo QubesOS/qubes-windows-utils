@@ -22,6 +22,16 @@
 #include "vchan-common.h"
 #include "log.h"
 
+#include <strsafe.h>
+
+static void VchanLogger(IN int logLevel, IN const char* function, IN const wchar_t* format, IN va_list args)
+{
+    wchar_t buf[1024];
+
+    StringCbVPrintfW(buf, sizeof(buf), format, args);
+    _LogFormat(logLevel, /*raw=*/FALSE, function, buf);
+}
+
 libvchan_t *VchanInitServer(IN int domain, IN int port, IN size_t bufferSize, IN DWORD timeout)
 {
     libvchan_t *vchan;
@@ -30,6 +40,7 @@ libvchan_t *VchanInitServer(IN int domain, IN int port, IN size_t bufferSize, IN
 
     LogDebug("domain %d, port %d, buffer %lu, timeout %lu", domain, port, bufferSize, timeout);
 
+    libvchan_register_logger(VchanLogger, LogGetLevel());
     vchan = libvchan_server_init(domain, port, bufferSize, bufferSize);
 
     while (vchan == NULL && GetLastError() == ERROR_NOT_SUPPORTED && (ticks - start) < timeout)
@@ -51,6 +62,7 @@ libvchan_t *VchanInitClient(IN int domain, IN int port, IN DWORD timeout)
 
     LogDebug("domain %d, port %d, timeout %lu", domain, port, timeout);
 
+    libvchan_register_logger(VchanLogger, LogGetLevel());
     vchan = libvchan_client_init(domain, port);
 
     while (vchan == NULL && GetLastError() == ERROR_NOT_SUPPORTED && (ticks - start) < timeout)
