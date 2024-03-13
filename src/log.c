@@ -572,7 +572,7 @@ DWORD _win_perror(IN const char *functionName, IN const WCHAR *prefix)
 
     if (!charCount)
     {
-        if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), L" failed with error 0x%08x\n", errorCode)))
+        if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer), L" failed with error 0x%x\n", errorCode)))
             goto cleanup;
     }
     else
@@ -580,7 +580,7 @@ DWORD _win_perror(IN const char *functionName, IN const WCHAR *prefix)
         ret = StringCchPrintf(
             buffer,
             RTL_NUMBER_OF(buffer),
-            L" failed with error %d: %s%s",
+            L" failed with error 0x%x: %s%s",
             errorCode,
             message,
             ((charCount >= 1) && (0x0a == message[charCount - 1])) ? L"" : L"\n");
