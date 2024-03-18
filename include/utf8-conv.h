@@ -20,8 +20,7 @@
  */
 
 #pragma once
-#include <windows.h>
-#include <stdlib.h>
+#include <windef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,18 +32,29 @@ extern "C" {
 #    define WINDOWSUTILS_API __declspec(dllimport)
 #endif
 
-// Returns number of characters in output buffer, without terminating NULL.
-WINDOWSUTILS_API
-DWORD ConvertUTF8ToUTF16(IN const char *inputUtf8, OUT WCHAR **outputUtf16, OUT size_t *cchOutput OPTIONAL);
+#define CONVERT_MAX_BUFFER_LENGTH      65536
+#define CONVERT_MAX_BUFFER_SIZE_UTF8   CONVERT_MAX_BUFFER_LENGTH
+#define CONVERT_MAX_BUFFER_SIZE_UTF16  (CONVERT_MAX_BUFFER_LENGTH * sizeof(WCHAR))
 
-// Returns number of characters in output buffer, without terminating NULL.
+// Uses a static output buffer that's overwritten with each call.
+// cchOutput is the number of characters in the output buffer, without terminating NULL.
 WINDOWSUTILS_API
-DWORD ConvertUTF16ToUTF8(IN const WCHAR *inputUtf16, OUT char **outputUtf8, OUT size_t *cchOutput OPTIONAL);
+DWORD ConvertUTF8ToUTF16Static(IN const char *inputUtf8, OUT WCHAR **outputUtf16, OUT size_t *cchOutput OPTIONAL);
 
-// Free memory allocated by the conversion functions.
-// This is needed for executables that don't use the same CRT as this DLL (can't just use free() in such cases).
+// Uses a static output buffer that's overwritten with each call.
+// cchOutput is the number of characters in the output buffer, without terminating NULL.
 WINDOWSUTILS_API
-void ConvertFree(void *p);
+DWORD ConvertUTF16ToUTF8Static(IN const WCHAR *inputUtf16, OUT char **outputUtf8, OUT size_t *cchOutput OPTIONAL);
+
+// outputUtf16 must be at least CONVERT_MAX_BUFFER_LENGTH WCHARs.
+// cchOutput is the number of characters in the output buffer, without terminating NULL.
+WINDOWSUTILS_API
+DWORD ConvertUTF8ToUTF16(IN const char* inputUtf8, OUT WCHAR* outputUtf16, OUT size_t* cchOutput OPTIONAL);
+
+// outputUtf8 must be at least CONVERT_MAX_BUFFER_LENGTH chars.
+// cchOutput is the number of characters in the output buffer, without terminating NULL.
+WINDOWSUTILS_API
+DWORD ConvertUTF16ToUTF8(IN const WCHAR* inputUtf16, OUT char* outputUtf8, OUT size_t* cchOutput OPTIONAL);
 
 #ifdef __cplusplus
 }

@@ -43,6 +43,10 @@ static CRITICAL_SECTION g_Lock = { 0 };
 #error "UNLEN > LOG_MAX_MESSAGE_LENGTH"
 #endif
 
+static WCHAR g_Buffer[BUFFER_SIZE];
+static char g_BufferUtf8[CONVERT_MAX_BUFFER_LENGTH];
+static char g_PrefixBufferUtf8[CONVERT_MAX_BUFFER_LENGTH];
+
 static WCHAR g_LogLevelChar[] = {
     L'?',
     L'E',
@@ -396,12 +400,9 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     SYSTEMTIME st;
     WCHAR prefixBuffer[256];
     int prefixLen = 0;
-    WCHAR *buffer = NULL;
     char *newline = "\r\n";
 #define NEWLINE_LEN 2
     BOOL addNewline = FALSE;
-    char *bufferUtf8 = NULL;
-    char *prefixBufferUtf8 = NULL;
     size_t prefixBufferSize = 0;
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
     DWORD lastError = GetLastError(); // preserve last error
@@ -424,13 +425,6 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
     EnterCriticalSection(&g_Lock);
 
-    buffer = (WCHAR*) malloc(BUFFER_SIZE);
-    if (!buffer)
-    {
-        SetLastError(ERROR_OUTOFMEMORY);
-        goto cleanup;
-    }
-
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
     if (!raw)
@@ -445,42 +439,41 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
 
     va_start(args, format);
 
-    ZeroMemory(buffer, BUFFER_SIZE);
     // format buffer
-    bufferSize = vswprintf_s(buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(WCHAR);
+    bufferSize = vswprintf_s(g_Buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(WCHAR);
     va_end(args);
 
     if (!raw)
     {
-        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, &prefixBufferUtf8, &prefixBufferSize))
+        if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, g_PrefixBufferUtf8, &prefixBufferSize))
         {
-            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d%S", GetLastError(), newline);
+            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(prefix) failed: error %d%S", GetLastError(), newline);
             goto cleanup;
         }
     }
 
-    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(buffer, &bufferUtf8, &bufferSize))
+    if (ERROR_SUCCESS != ConvertUTF16ToUTF8(g_Buffer, g_BufferUtf8, &bufferSize))
     {
-        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8 failed: error %d%S", GetLastError(), newline);
+        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(buffer) failed: error %d%S", GetLastError(), newline);
         goto cleanup;
     }
 
-    if (strncmp(newline, &bufferUtf8[bufferSize - NEWLINE_LEN], NEWLINE_LEN) != 0)
+    if (strncmp(newline, &g_BufferUtf8[bufferSize - NEWLINE_LEN], NEWLINE_LEN) != 0)
         addNewline = TRUE;
 
     if (g_LogfileHandle != INVALID_HANDLE_VALUE)
     {
         if (!raw)
         {
-            if (!WriteFile(g_LogfileHandle, prefixBufferUtf8, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
+            if (!WriteFile(g_LogfileHandle, g_PrefixBufferUtf8, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
             {
-                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
+                fwprintf(stderr, L"_LogFormat: WriteFile(prefix) failed: error %d%S", GetLastError(), newline);
                 goto cleanup;
             }
         }
 
-        // buffer_size is at most INT_MAX*2
-        if (!WriteFile(g_LogfileHandle, bufferUtf8, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
+        // bufferSize is at most INT_MAX*2
+        if (!WriteFile(g_LogfileHandle, g_BufferUtf8, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
         {
             fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
             goto cleanup;
@@ -500,14 +493,14 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
             if (!raw)
                 fwprintf(stderr, prefixBuffer);
 
-            fwprintf(stderr, buffer);
+            fwprintf(stderr, g_Buffer);
             if (addNewline && !raw)
             {
                 fwprintf(stderr, L"%S", newline);
             }
 
 #if defined(DEBUG) || defined(_DEBUG)
-            OutputDebugString(buffer);
+            OutputDebugString(g_Buffer);
             if (addNewline && !raw)
             {
                 OutputDebugStringA(newline);
@@ -519,7 +512,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     {
         if (!raw)
             fwprintf(stderr, L"%s", prefixBuffer);
-        fwprintf(stderr, L"%s", buffer);
+        fwprintf(stderr, L"%s", g_Buffer);
         if (addNewline && !raw)
         {
             fwprintf(stderr, L"%S", newline);
@@ -527,12 +520,6 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     }
 
 cleanup:
-
-    free(buffer);
-
-    if (!raw)
-        free(prefixBufferUtf8);
-    free(bufferUtf8);
 
 #ifdef LOG_SAFE_FLUSH
     LogFlush();

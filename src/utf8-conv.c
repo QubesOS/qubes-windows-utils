@@ -21,87 +21,98 @@
 
 #include <windows.h>
 #include <stdlib.h>
-#include <strsafe.h>
 
 #include "utf8-conv.h"
 
-DWORD ConvertUTF8ToUTF16(IN const char *inputUtf8, OUT WCHAR **outputUtf16, OUT size_t *cchOutput OPTIONAL)
+static char* g_Buffer = NULL;
+static WCHAR* g_BufferW = NULL;
+
+DWORD ConvertUTF8ToUTF16(IN const char* inputUtf8, OUT WCHAR* outputUtf16, OUT size_t* cchOutput OPTIONAL)
 {
-    int result;
-    size_t cbUtf8;
-    int cchUtf16;
-    WCHAR *bufferUtf16;
+    DWORD status = ERROR_SUCCESS;
 
-    if (FAILED(StringCchLengthA(inputUtf8, STRSAFE_MAX_CCH, &cbUtf8)))
-        return GetLastError();
-
-    if (cbUtf8 - 1 >= INT_MAX)
-        return ERROR_BAD_ARGUMENTS;
-
-    cchUtf16 = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, inputUtf8, (int) cbUtf8 + 1, NULL, 0);
-    if (!cchUtf16)
+    int utf16_count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, inputUtf8, -1, outputUtf16,
+        CONVERT_MAX_BUFFER_LENGTH);
+    if (utf16_count == 0)
     {
-        return GetLastError();
-    }
-
-    bufferUtf16 = (WCHAR*) malloc(cchUtf16 * sizeof(WCHAR));
-    if (!bufferUtf16)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    result = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, inputUtf8, (int) cbUtf8 + 1, bufferUtf16, cchUtf16);
-    if (!result)
-    {
-        free(bufferUtf16);
-        return GetLastError();
-    }
-
-    bufferUtf16[cchUtf16 - 1] = L'\0';
-    *outputUtf16 = bufferUtf16;
-    if (cchOutput)
-        *cchOutput = cchUtf16 - 1; /* without terminating NULL character */
-
-    return ERROR_SUCCESS;
-}
-
-DWORD ConvertUTF16ToUTF8(IN const WCHAR *inputUtf16, OUT char **outputUtf8, OUT size_t *cchOutput OPTIONAL)
-{
-    char *bufferUtf8;
-    int cbUtf8;
-    DWORD conversionFlags = 0;
-
-    // WC_ERR_INVALID_CHARS is defined for Vista and later only
-#if (WINVER >= 0x0600)
-    conversionFlags = WC_ERR_INVALID_CHARS;
-#endif
-
-    /* convert filename from UTF-16 to UTF-8 */
-    /* calculate required size */
-    cbUtf8 = WideCharToMultiByte(CP_UTF8, conversionFlags, inputUtf16, -1, NULL, 0, NULL, NULL);
-
-    if (!cbUtf8)
-    {
-        return GetLastError();
-    }
-
-    bufferUtf8 = (char*) malloc(cbUtf8);
-    if (!bufferUtf8)
-    {
-        return ERROR_NOT_ENOUGH_MEMORY;
-    }
-
-    if (!WideCharToMultiByte(CP_UTF8, conversionFlags, inputUtf16, -1, bufferUtf8, cbUtf8, NULL, NULL))
-    {
-        free(bufferUtf8);
-        return GetLastError();
+        status = GetLastError();
+        if (cchOutput)
+            *cchOutput = 0;
+        goto end;
     }
 
     if (cchOutput)
-        *cchOutput = cbUtf8 - 1; /* without terminating NULL character */
-    *outputUtf8 = bufferUtf8;
-    return ERROR_SUCCESS;
+        *cchOutput = utf16_count - 1; // without terminating NULL character
+
+end:
+    return status;
 }
 
-void ConvertFree(void *p)
+DWORD ConvertUTF16ToUTF8(IN const WCHAR* inputUtf16, OUT char* outputUtf8, OUT size_t* cchOutput OPTIONAL)
 {
-    free(p);
+    DWORD status = ERROR_SUCCESS;
+
+    int utf8_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, inputUtf16, -1, outputUtf8,
+        CONVERT_MAX_BUFFER_LENGTH, NULL, NULL);
+    if (utf8_count == 0)
+    {
+        status = GetLastError();
+        if (cchOutput)
+            *cchOutput = 0;
+        goto end;
+    }
+
+    if (cchOutput)
+        *cchOutput = utf8_count - 1; // without terminating NULL character
+
+end:
+    return status;
+}
+
+DWORD ConvertUTF8ToUTF16Static(IN const char *inputUtf8, OUT WCHAR **outputUtf16, OUT size_t *cchOutput OPTIONAL)
+{
+    DWORD status = ERROR_SUCCESS;
+
+    if (!g_BufferW)
+    {
+        g_BufferW = (WCHAR*) malloc(CONVERT_MAX_BUFFER_SIZE_UTF16);
+        if (!g_BufferW)
+        {
+            status = ERROR_OUTOFMEMORY;
+            goto end;
+        }
+    }
+
+    status = ConvertUTF8ToUTF16(inputUtf8, g_BufferW, cchOutput);
+    if (status == ERROR_SUCCESS)
+        *outputUtf16 = g_BufferW;
+    else
+        *outputUtf16 = NULL;
+
+end:
+    return status;
+}
+
+DWORD ConvertUTF16ToUTF8Static(IN const WCHAR *inputUtf16, OUT char **outputUtf8, OUT size_t *cchOutput OPTIONAL)
+{
+    DWORD status = ERROR_SUCCESS;
+
+    if (!g_Buffer)
+    {
+        g_Buffer = (char*) malloc(CONVERT_MAX_BUFFER_SIZE_UTF8);
+        if (!g_Buffer)
+        {
+            status = ERROR_OUTOFMEMORY;
+            goto end;
+        }
+    }
+
+    status = ConvertUTF16ToUTF8(inputUtf16, g_Buffer, cchOutput);
+    if (status == ERROR_SUCCESS)
+        *outputUtf8 = g_Buffer;
+    else
+        *outputUtf8 = NULL;
+
+end:
+    return status;
 }
