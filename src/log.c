@@ -219,7 +219,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
         {
             LogStart(NULL);
             win_perror("CreateDirectory");
-            LogWarning("failed to create %s\n", logDir);
+            LogWarning("failed to create %s", logDir);
             goto fallback;
         }
     }
@@ -241,7 +241,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     LogStart(buffer);
 
 fallback:
-    LogInfo("Log started, module name: %s\n", g_LogName);
+    LogInfo("Log started, module name: %s", g_LogName);
     ZeroMemory(buffer, sizeof(buffer));
 
     // if we pass too large buffer it returns ERROR_BUFFER_TOO_SMALL... go figure
@@ -249,11 +249,11 @@ fallback:
     if (!GetUserName(buffer, &len))
     {
         win_perror("GetUserName");
-        LogInfo("Running as user: <UNKNOWN>, process ID: %d\n", GetCurrentProcessId());
+        LogInfo("Running as user: <UNKNOWN>, process ID: %d", GetCurrentProcessId());
     }
     else
     {
-        LogInfo("Running as user: %s, process ID: %d\n", buffer, GetCurrentProcessId());
+        LogInfo("Running as user: %s, process ID: %d", buffer, GetCurrentProcessId());
     }
 
     // version
@@ -400,8 +400,6 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     SYSTEMTIME st;
     WCHAR prefixBuffer[256];
     int prefixLen = 0;
-    char *newline = "\r\n";
-#define NEWLINE_LEN 2
     BOOL addNewline = FALSE;
     size_t prefixBufferSize = 0;
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
@@ -447,18 +445,18 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     {
         if (ERROR_SUCCESS != ConvertUTF16ToUTF8(prefixBuffer, g_PrefixBufferUtf8, &prefixBufferSize))
         {
-            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(prefix) failed: error %d%S", GetLastError(), newline);
+            fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(prefix) failed: error %d\n", GetLastError());
             goto cleanup;
         }
     }
 
     if (ERROR_SUCCESS != ConvertUTF16ToUTF8(g_Buffer, g_BufferUtf8, &bufferSize))
     {
-        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(buffer) failed: error %d%S", GetLastError(), newline);
+        fwprintf(stderr, L"_LogFormat: ConvertUTF16ToUTF8(buffer) failed: error %d\n", GetLastError());
         goto cleanup;
     }
 
-    if (strncmp(newline, &g_BufferUtf8[bufferSize - NEWLINE_LEN], NEWLINE_LEN) != 0)
+    if (g_BufferUtf8[bufferSize - 1] != '\n')
         addNewline = TRUE;
 
     if (g_LogfileHandle != INVALID_HANDLE_VALUE)
@@ -467,7 +465,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         {
             if (!WriteFile(g_LogfileHandle, g_PrefixBufferUtf8, (DWORD) prefixBufferSize, &written, NULL) || written != (DWORD) prefixBufferSize)
             {
-                fwprintf(stderr, L"_LogFormat: WriteFile(prefix) failed: error %d%S", GetLastError(), newline);
+                fwprintf(stderr, L"_LogFormat: WriteFile(prefix) failed: error %d\n", GetLastError());
                 goto cleanup;
             }
         }
@@ -475,15 +473,15 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         // bufferSize is at most INT_MAX*2
         if (!WriteFile(g_LogfileHandle, g_BufferUtf8, (DWORD) bufferSize, &written, NULL) || written != (DWORD) bufferSize)
         {
-            fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
+            fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d\n", GetLastError());
             goto cleanup;
         }
 
         if (addNewline && !raw)
         {
-            if (!WriteFile(g_LogfileHandle, newline, NEWLINE_LEN, &written, NULL) || written != NEWLINE_LEN)
+            if (!WriteFile(g_LogfileHandle, "\n", 1, &written, NULL) || written != 1)
             {
-                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d%S", GetLastError(), newline);
+                fwprintf(stderr, L"_LogFormat: WriteFile failed: error %d\n", GetLastError());
                 goto cleanup;
             }
         }
@@ -496,14 +494,14 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
             fwprintf(stderr, g_Buffer);
             if (addNewline && !raw)
             {
-                fwprintf(stderr, L"%S", newline);
+                fwprintf(stderr, L"\n");
             }
 
 #if defined(DEBUG) || defined(_DEBUG)
             OutputDebugString(g_Buffer);
             if (addNewline && !raw)
             {
-                OutputDebugStringA(newline);
+                OutputDebugStringA("\n");
             }
 #endif
         }
@@ -515,7 +513,7 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
         fwprintf(stderr, L"%s", g_Buffer);
         if (addNewline && !raw)
         {
-            fwprintf(stderr, L"%S", newline);
+            fwprintf(stderr, L"\n");
         }
     }
 
