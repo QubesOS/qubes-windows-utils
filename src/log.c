@@ -29,6 +29,7 @@
 #include "log.h"
 #include "config.h"
 #include "error.h"
+#include "exec.h"
 
 static BOOL g_LoggerInitialized = FALSE;
 static BOOL g_SafeFlush = FALSE;
@@ -271,6 +272,8 @@ fallback:
     GetTokenInformation(token, TokenSessionId, &sessionId, sizeof(sessionId), &len);
     CloseHandle(token);
     LogInfo("Session: %lu", sessionId);
+
+    LogInfo("Command line: %s", GetOriginalCommandLine());
 }
 
 // Use the log directory from registry config.

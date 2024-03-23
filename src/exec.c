@@ -22,6 +22,8 @@
 #include "exec.h"
 #include "log.h"
 
+static WCHAR* g_OriginalCommandLine = NULL;
+
 DWORD GetAccountSid(
     IN const WCHAR *accountName,
     IN const WCHAR *systemName,
@@ -720,10 +722,21 @@ DWORD CreateNormalProcessAsCurrentUser(
     return status;
 }
 
+PWSTR GetOriginalCommandLine(void)
+{
+    if (!g_OriginalCommandLine)
+        g_OriginalCommandLine = _wcsdup(GetCommandLineW());
+
+    return g_OriginalCommandLine;
+}
+
 PWSTR GetArgument(void)
 {
     static PWCHAR cmd = NULL;
     static PWCHAR separator;
+
+    if (!g_OriginalCommandLine)
+        g_OriginalCommandLine = _wcsdup(GetCommandLineW());
 
     if (!cmd) // find the start of arguments
     {

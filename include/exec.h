@@ -106,9 +106,13 @@ DWORD CreateNormalProcessAsCurrentUser(
     OUT HANDLE *process
     );
 
-// Call repeatedly to get command line arguments sequentially.
+// Call repeatedly to get command line arguments sequentially. Modifies process' command line.
 WINDOWSUTILS_API
 PWSTR GetArgument(void);
+
+// Get the original process command line.
+WINDOWSUTILS_API
+PWSTR GetOriginalCommandLine(void);
 
 // Create a security descriptor that grants Everyone read/write access to a pipe.
 // Caller must LocalFree both pointers.
