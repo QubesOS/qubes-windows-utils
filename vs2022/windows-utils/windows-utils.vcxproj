@@ -112,7 +112,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <IncrementalLinkDatabaseFile />
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);libvchan.lib;shlwapi.lib;userenv.lib;wtsapi32.lib;version.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);libvchan.lib;shlwapi.lib;pathcch.lib;userenv.lib;wtsapi32.lib;version.lib</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>powershell $(ProjectDir)\..\..\set_version.ps1 $(ProjectDir)\..\..\version $(ProjectDir)\..\..\include\qwt_version.h</Command>
@@ -146,7 +146,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <IncrementalLinkDatabaseFile />
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);libvchan.lib;shlwapi.lib;userenv.lib;wtsapi32.lib;version.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);libvchan.lib;shlwapi.lib;pathcch.lib;userenv.lib;wtsapi32.lib;version.lib</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>powershell $(ProjectDir)\..\..\set_version.ps1 $(ProjectDir)\..\..\version $(ProjectDir)\..\..\include\qwt_version.h</Command>

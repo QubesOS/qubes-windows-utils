@@ -22,34 +22,41 @@
 #include <windows.h>
 #include <shlwapi.h>
 #include <strsafe.h>
+#include <PathCch.h>
 
 #include "config.h"
+#include "qubes-io.h"
+
+// We don't use log here because these functions are used in log initialization.
 
 // Get current executable's module name (base file name without extension).
 DWORD CfgGetModuleName(OUT WCHAR *moduleName, IN DWORD cchModuleName)
 {
-    WCHAR exePath[MAX_PATH], *exeName;
-    DWORD status = ERROR_SUCCESS;
+    DWORD status = ERROR_OUTOFMEMORY;
 
-    if (!GetModuleFileName(NULL, exePath, RTL_NUMBER_OF(exePath)))
+    WCHAR* exePath = malloc(MAX_PATH_LONG_WSIZE);
+    if (!exePath)
+        goto cleanup;
+
+    if (!GetModuleFileName(NULL, exePath, MAX_PATH_LONG))
     {
         status = GetLastError();
         goto cleanup;
     }
-    PathRemoveExtension(exePath);
-    exeName = PathFindFileName(exePath);
-    if (exeName == exePath) // failed
-    {
-        status = ERROR_INVALID_NAME;
-        goto cleanup;
-    }
 
-    if (FAILED(StringCchCopy(moduleName, cchModuleName, exeName)))
-    {
-        status = ERROR_INVALID_DATA;
-    }
+    status = PathCchRemoveExtension(exePath, MAX_PATH_LONG);
+    if (FAILED(status))
+        goto cleanup;
+
+    status = ERROR_INVALID_NAME;
+    WCHAR* exeName = PathFindFileName(exePath);
+    if (exeName == exePath) // failed
+        goto cleanup;
+
+    status = StringCchCopy(moduleName, cchModuleName, exeName);
 
 cleanup:
+    free(exePath);
     SetLastError(status);
     return status;
 }
