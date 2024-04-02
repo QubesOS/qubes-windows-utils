@@ -32,6 +32,14 @@ extern "C" {
 #    define WINDOWSUTILS_API __declspec(dllimport)
 #endif
 
+// Extended path length limit for Windows FS APIs
+#define MAX_PATH_LONG         32768
+#define MAX_PATH_LONG_WSIZE   (MAX_PATH_LONG * sizeof(WCHAR))
+#define UNC_PATH_PREFIX       L"\\\\?\\"
+#define UNC_PATH_PREFIX_LEN   4
+// without null terminator
+#define UNC_PATH_PREFIX_SIZE  8
+
 // Read/WriteFile can succeed but not read/write the whole buffer in some cases
 // (mostly pipes with small internal buffers and PIPE_NOWAIT mode for writing).
 // The functions below make sure that the whole buffer is transferred
