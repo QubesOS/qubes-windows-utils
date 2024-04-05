@@ -145,31 +145,34 @@ void QpsDestroy(
     PIPE_SERVER Server
     )
 {
-    LONGLONG *clientIds;
-    LONGLONG i;
-
     if (!Server)
         return;
 
     // get list of current clients
     EnterCriticalSection(&Server->Lock);
     Server->AcceptConnections = FALSE;
-    clientIds = malloc(Server->NumberClients * sizeof(clientIds[0]));
+    LONGLONG* clientIds = malloc(Server->NumberClients * sizeof(clientIds[0]));
+    if (!clientIds)
+        exit(ERROR_OUTOFMEMORY);
 
-    i = 0;
-    while (!IsListEmpty(&Server->Clients))
+    LONGLONG clientCount = 0;
+    PLIST_ENTRY entry = Server->Clients.Flink;
+    while (entry != &Server->Clients)
     {
-        PPIPE_CLIENT client = CONTAINING_RECORD(Server->Clients.Flink, PIPE_CLIENT, ListEntry);
-        clientIds[i++] = client->Id; // can't call disconnect here, would deadlock on QpsReleaseClient
+        PPIPE_CLIENT client = (PPIPE_CLIENT)CONTAINING_RECORD(entry, PIPE_CLIENT, ListEntry);
+        clientIds[clientCount++] = client->Id; // can't call disconnect here, would deadlock on QpsReleaseClient
+
+        entry = entry->Flink;
     }
     LeaveCriticalSection(&Server->Lock);
 
     // disconnect all clients, need to be not holding the global lock
-    while (i > 0)
+    LogDebug("Removing %ll clients", clientCount);
+    while (clientCount > 0)
     {
-        --i;
+        --clientCount;
         // if a client is disconnected in the meantime it's ok
-        QpsDisconnectClientInternal(Server, clientIds[i], FALSE, FALSE);
+        QpsDisconnectClientInternal(Server, clientIds[clientCount], FALSE, FALSE);
     }
 
     DeleteCriticalSection(&Server->Lock);
