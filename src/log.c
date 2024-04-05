@@ -20,16 +20,16 @@
  */
 
 #include <windows.h>
+#include <PathCch.h>
 #include <stdlib.h>
 #include <strsafe.h>
-#include <lmcons.h>
-#include <shlwapi.h>
 
 #include "utf8-conv.h"
 #include "log.h"
 #include "config.h"
 #include "error.h"
 #include "exec.h"
+#include "qubes-io.h"
 
 static BOOL g_LoggerInitialized = FALSE;
 static BOOL g_SafeFlush = FALSE;
@@ -57,77 +57,115 @@ static WCHAR g_LogLevelChar[] = {
     L'V'
 };
 
+void LogLock()
+{
+    EnterCriticalSection(&g_Lock);
+}
+
+void LogUnlock()
+{
+    LeaveCriticalSection(&g_Lock);
+}
+
 static DWORD GetCurrentModuleVersion(OUT DWORD *versionMajor, OUT DWORD *versionMinor)
 {
-    WCHAR currentModulePath[MAX_PATH] = { 0 };
-    DWORD cbVersion = 0;
     BYTE *versionBuffer = NULL;
-    VS_FIXEDFILEINFO *fileInfo = NULL;
-    UINT cbFileInfo = 0;
 
-    GetModuleFileName(NULL, currentModulePath, RTL_NUMBER_OF(currentModulePath));
+    DWORD status = ERROR_OUTOFMEMORY;
+    WCHAR* currentModulePath = malloc(MAX_PATH_LONG_WSIZE);
+    if (!currentModulePath)
+        goto cleanup;
 
-    cbVersion = GetFileVersionInfoSize(currentModulePath, NULL);
+    if (GetModuleFileName(NULL, currentModulePath, MAX_PATH_LONG) == 0)
+    {
+        status = GetLastError();
+        goto cleanup;
+    }
+
+    DWORD cbVersion = GetFileVersionInfoSize(currentModulePath, NULL);
     if (cbVersion == 0)
         goto cleanup;
 
     versionBuffer = malloc(cbVersion);
     if (!versionBuffer)
     {
-        SetLastError(ERROR_OUTOFMEMORY);
+        status = ERROR_OUTOFMEMORY;
         goto cleanup;
     }
 
     if (!GetFileVersionInfo(currentModulePath, 0, cbVersion, versionBuffer))
+    {
+        status = GetLastError();
         goto cleanup;
+    }
 
+    VS_FIXEDFILEINFO* fileInfo = NULL;
+    UINT cbFileInfo = 0;
     if (!VerQueryValue(versionBuffer, L"\\", &fileInfo, &cbFileInfo))
+    {
+        status = GetLastError();
         goto cleanup;
+    }
 
     *versionMajor = fileInfo->dwFileVersionMS;
     *versionMinor = fileInfo->dwFileVersionLS;
+    status = ERROR_SUCCESS;
 
 cleanup:
+    free(currentModulePath);
     free(versionBuffer);
-    return GetLastError();
+    return status;
 }
 
 static void PurgeOldLogs(IN const WCHAR *logDir)
 {
-    FILETIME ft;
-    ULARGE_INTEGER *thresholdTime = (ULARGE_INTEGER *) &ft;
-    WIN32_FIND_DATA findData;
-    HANDLE findHandle;
-    WCHAR searchMask[MAX_PATH];
-    WCHAR filePath[MAX_PATH];
-    LARGE_INTEGER logRetentionTime = { 0 };
-
     // Read log retention time from registry (in seconds).
+    LARGE_INTEGER logRetentionTime = { 0 };
     if (ERROR_SUCCESS != CfgReadDword(g_LogName, LOG_CONFIG_RETENTION_VALUE, &logRetentionTime.LowPart, NULL))
         logRetentionTime.QuadPart = LOG_DEFAULT_RETENTION_TIME;
 
     logRetentionTime.QuadPart *= 10000000ULL; // convert to 100ns units
 
+    FILETIME ft;
+    ULARGE_INTEGER* thresholdTime = (ULARGE_INTEGER*)&ft;
+
     GetSystemTimeAsFileTime(&ft);
     (*thresholdTime).QuadPart -= logRetentionTime.QuadPart;
 
-    StringCchPrintf(searchMask, RTL_NUMBER_OF(searchMask), L"%s\\%s*.*", logDir, g_LogName);
+    HANDLE findHandle = INVALID_HANDLE_VALUE;
+    WCHAR* filePath = NULL;
+    WCHAR* searchMask = malloc(MAX_PATH_LONG_WSIZE);
+    if (!searchMask)
+        goto end;
 
+    filePath = malloc(MAX_PATH_LONG_WSIZE);
+    if (!filePath)
+        goto end;
+
+    if (FAILED(StringCchPrintf(searchMask, MAX_PATH_LONG, L"%s\\%s*.*", logDir, g_LogName)))
+        goto end;
+
+    WIN32_FIND_DATA findData;
     findHandle = FindFirstFile(searchMask, &findData);
     if (findHandle == INVALID_HANDLE_VALUE)
-        return;
+        goto end;
 
     do
     {
         if ((*(ULARGE_INTEGER *) &findData.ftCreationTime).QuadPart < thresholdTime->QuadPart)
         {
             // File is too old, delete.
-            StringCchPrintf(filePath, RTL_NUMBER_OF(filePath), L"%s\\%s", logDir, findData.cFileName);
+            if (FAILED(PathCchCombineEx(filePath, MAX_PATH_LONG, logDir, findData.cFileName, PATHCCH_ALLOW_LONG_PATHS)))
+                goto end;
             DeleteFile(filePath);
         }
     } while (FindNextFile(findHandle, &findData));
 
-    FindClose(findHandle);
+end:
+    free(filePath);
+    free(searchMask);
+    if (findHandle != INVALID_HANDLE_VALUE)
+        FindClose(findHandle);
 }
 
 static WCHAR *LogGetName(void)
@@ -182,11 +220,11 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     SYSTEMTIME st;
     DWORD len = 0;
     WCHAR *format = L"%s\\%s-%04d%02d%02d-%02d%02d%02d-%d.log";
-    WCHAR systemPath[MAX_PATH];
-    WCHAR buffer[MAX_PATH];
+    WCHAR systemPath[MAX_PATH]; // this should be fine unless for some reason Windows dir is in a weird location
     DWORD versionMajor = 0, versionMinor = 0;
     HANDLE token;
     DWORD sessionId;
+    WCHAR* logPath = NULL;
 
     if (g_LogLevel < 0)
         g_LogLevel = LOG_LEVEL_DEFAULT;
@@ -205,6 +243,7 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
             LogWarning("GetSystemDirectory"); // this will just write to stderr before logfile is initialized
             goto fallback;
         }
+
         if (FAILED(StringCchCopy(systemPath + 3, RTL_NUMBER_OF(systemPath) - 3, LOG_DEFAULT_DIR L"\0")))
         {
             LogStart(NULL);
@@ -226,10 +265,16 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
     }
 
     PurgeOldLogs(logDir);
-    ZeroMemory(buffer, sizeof(buffer));
 
-    if (FAILED(StringCchPrintf(buffer, RTL_NUMBER_OF(buffer),
-        format,
+    logPath = malloc(MAX_PATH_LONG_WSIZE);
+    if (!logPath)
+    {
+        LogStart(NULL);
+        LogWarning("Out of memory");
+        goto fallback;
+    }
+
+    if (FAILED(StringCchPrintf(logPath, MAX_PATH_LONG, format,
         logDir, g_LogName, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
         GetCurrentProcessId()
         )))
@@ -239,22 +284,22 @@ void LogInit(IN const WCHAR *logDir OPTIONAL, IN const WCHAR *logName)
         goto fallback;
     }
 
-    LogStart(buffer);
+    LogStart(logPath);
 
 fallback:
+    free(logPath);
     LogInfo("Log started, module name: %s", g_LogName);
-    ZeroMemory(buffer, sizeof(buffer));
 
-    // if we pass too large buffer it returns ERROR_BUFFER_TOO_SMALL... go figure
-    len = UNLEN;
-    if (!GetUserName(buffer, &len))
+    // reuse systemPath
+    len = ARRAYSIZE(systemPath); //UNLEN
+    if (!GetUserName(systemPath, &len))
     {
         win_perror("GetUserName");
         LogInfo("Running as user: <UNKNOWN>, process ID: %d", GetCurrentProcessId());
     }
     else
     {
-        LogInfo("Running as user: %s, process ID: %d", buffer, GetCurrentProcessId());
+        LogInfo("Running as user: %s, process ID: %d", systemPath, GetCurrentProcessId());
     }
 
     // version
@@ -272,7 +317,6 @@ fallback:
     GetTokenInformation(token, TokenSessionId, &sessionId, sizeof(sessionId), &len);
     CloseHandle(token);
     LogInfo("Session: %lu", sessionId);
-
     LogInfo("Command line: %s", GetOriginalCommandLine());
 }
 
@@ -280,9 +324,6 @@ fallback:
 // If logName is NULL, use current executable as name.
 DWORD LogInitDefault(IN const WCHAR *logName OPTIONAL)
 {
-    DWORD status;
-    WCHAR logPath[MAX_PATH];
-
     if (!logName)
     {
         logName = LogGetName();
@@ -300,20 +341,28 @@ DWORD LogInitDefault(IN const WCHAR *logName OPTIONAL)
 
     LogReadLevel(); // needs log name
 
-    status = CfgReadString(logName, LOG_CONFIG_PATH_VALUE, logPath, RTL_NUMBER_OF(logPath), NULL);
-    if (ERROR_SUCCESS != status)
+    DWORD status;
+    WCHAR* logPath = malloc(MAX_PATH_LONG_WSIZE);
+    if (!logPath)
     {
         // failed, use default location
         LogInit(NULL, logName);
-        SetLastError(status);
+        status = ERROR_OUTOFMEMORY;
+        goto end;
+    }
+
+    status = CfgReadString(logName, LOG_CONFIG_PATH_VALUE, logPath, MAX_PATH_LONG, NULL);
+    if (ERROR_SUCCESS != status)
+    {
+        LogInit(NULL, logName);
     }
     else
     {
         LogInit(logPath, logName);
     }
 
+end:
     LogDebug("Verbosity level set to %d, safe flush: %d", g_LogLevel, g_SafeFlush);
-
     return status;
 }
 
