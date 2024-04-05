@@ -444,9 +444,8 @@ void LogFlush(void)
         FlushFileBuffers(g_LogfileHandle);
 }
 
-void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const WCHAR *format, ...)
+static void _LogFormatUnlocked(IN int level, IN BOOL raw, IN const char *functionName, IN const WCHAR *format, va_list args)
 {
-    va_list args;
     size_t bufferSize = 0;
     DWORD written = 0;
     SYSTEMTIME st;
@@ -455,25 +454,6 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
     BOOL addNewline = FALSE;
     size_t prefixBufferSize = 0;
     BOOL echoToStderr = level <= LOG_LEVEL_WARNING;
-    DWORD lastError = GetLastError(); // preserve last error
-
-#ifndef _DEBUG
-    // crash with full force on debug builds
-    ErrRegisterUEF();
-#endif
-
-    // If we're initializing ad-hoc on a first log call, first read the log level
-    // so we can tell if the log file should be created now.
-    if (g_LogLevel < 0)
-        LogReadLevel();
-
-    if (level > g_LogLevel)
-        return;
-
-    if (!g_LoggerInitialized)
-        LogInitDefault(NULL);
-
-    EnterCriticalSection(&g_Lock);
 
 #define PREFIX_FORMAT TEXT("[%04d%02d%02d.%02d%02d%02d.%03d-%d-%c] ")
 #define PREFIX_FORMAT_FUNCNAME TEXT("%S: ")
@@ -487,11 +467,8 @@ void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const
             GetCurrentThreadId(), g_LogLevelChar[level], functionName);
     }
 
-    va_start(args, format);
-
     // format buffer
     bufferSize = vswprintf_s(g_Buffer, LOG_MAX_MESSAGE_LENGTH, format, args) * sizeof(WCHAR);
-    va_end(args);
 
     if (!raw)
     {
@@ -574,9 +551,39 @@ cleanup:
 #ifdef LOG_SAFE_FLUSH
     LogFlush();
 #endif
+    return;
+}
 
+void _LogFormat(IN int level, IN BOOL raw, IN const char* functionName, IN const WCHAR* format, ...)
+{
+    DWORD lastError = GetLastError(); // preserve last error
+
+    ErrRegisterUEF();
+
+    // If we're initializing ad-hoc on a first log call, first read the log level
+    // so we can tell if the log file should be created now.
+    if (g_LogLevel < 0)
+        LogReadLevel();
+
+    if (level > g_LogLevel)
+        goto end;
+
+    if (!g_LoggerInitialized)
+        LogInitDefault(NULL);
+
+    if (!raw)
+        EnterCriticalSection(&g_Lock);
+
+    va_list args;
+    va_start(args, format);
+    _LogFormatUnlocked(level, raw, functionName, format, args);
+    va_end(args);
+
+    if (!raw)
+        LeaveCriticalSection(&g_Lock);
+
+end:
     SetLastError(lastError);
-    LeaveCriticalSection(&g_Lock);
 }
 
 // Like _win_perror, but takes explicit error code. For cases when previous call doesn't set LastError.
@@ -643,6 +650,7 @@ void _hex_dump(IN const WCHAR *desc, IN const void *addr, IN int len)
     if (len == 0)
         return;
 
+    LogLock();
     // Output description if given.
     if (desc != NULL)
         LogDebugRaw("%s:\n", desc);
@@ -687,4 +695,5 @@ void _hex_dump(IN const WCHAR *desc, IN const void *addr, IN int len)
 
     // And print the final ASCII bit.
     LogDebugRaw("  %s\n", buff);
+    LogUnlock();
 }

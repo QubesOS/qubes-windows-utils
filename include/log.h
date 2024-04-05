@@ -94,9 +94,17 @@ void LogSetLevel(IN int level);
 WINDOWSUTILS_API
 int LogGetLevel(void);
 
+// Enter the global logger lock (use with *raw macros).
+WINDOWSUTILS_API
+void LogLock();
+
+// Leave the global logger lock (use with *raw macros).
+WINDOWSUTILS_API
+void LogUnlock();
+
 WINDOWSUTILS_API
 void _LogFormat(IN int level, IN BOOL raw, IN const char *functionName, IN const WCHAR *format, ...);
-// *_raw functions omit the timestamp, function name prefix and don't append newlines automatically.
+// *raw macros omit the timestamp, function name prefix, don't append newlines automatically and assume the logger lock is held.
 
 // Microsoft compilers define __FUNCTION__ as a string literal.
 // This is better than the C standard which defines __func__ as a char[] variable,
