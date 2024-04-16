@@ -94,6 +94,15 @@ DWORD CreatePublicPipeSecurityDescriptor(
     OUT PACL *acl
     );
 
+// enable specified privilege for the current process
+WINDOWSUTILS_API
+DWORD EnablePrivilege(const WCHAR* privilegeName);
+
+// enable UI access pseudo-privilege in for the current process
+// requires SeTcbPrivilege (SYSTEM/service)
+WINDOWSUTILS_API
+DWORD EnableUIAccess();
+
 #ifdef __cplusplus
 }
 #endif

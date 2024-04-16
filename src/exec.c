@@ -447,3 +447,108 @@ cleanup:
         LocalFree(*securityDescriptor);
     return status;
 }
+
+// enable specified privilege for the current process
+DWORD EnablePrivilege(const WCHAR* privilegeName)
+{
+    DWORD status = ERROR_SUCCESS;
+    HANDLE token = NULL;
+
+    LogDebug("%s", privilegeName);
+    TOKEN_PRIVILEGES* privileges = NULL;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token))
+    {
+        status = win_perror("get current process token");
+        goto end;
+    }
+
+    LUID requestedPriv;
+    if (!LookupPrivilegeValue(NULL, privilegeName, &requestedPriv))
+    {
+        status = win_perror("LookupPrivilegeValue");
+        goto end;
+    }
+
+    DWORD size;
+    GetTokenInformation(token, TokenPrivileges, NULL, 0, &size);
+    status = GetLastError();
+    if (status != ERROR_INSUFFICIENT_BUFFER)
+        goto end;
+
+    status = ERROR_OUTOFMEMORY;
+    privileges = (TOKEN_PRIVILEGES*) malloc(size);
+    if (!privileges)
+        goto end;
+
+    if (!GetTokenInformation(token, TokenPrivileges, privileges, size, &size))
+    {
+        status = win_perror("GetTokenInformation");
+        goto end;
+    }
+
+    for (DWORD i = 0; i < privileges->PrivilegeCount; i++)
+    {
+        LONG high = privileges->Privileges[i].Luid.HighPart;
+        DWORD low = privileges->Privileges[i].Luid.LowPart;
+        DWORD mask = SE_PRIVILEGE_ENABLED_BY_DEFAULT | SE_PRIVILEGE_ENABLED;
+
+        // check if the privilege is present in the token
+        if (high == requestedPriv.HighPart && low == requestedPriv.LowPart)
+        {
+            if ((privileges->Privileges[i].Attributes & mask) != 0)
+            {
+                LogDebug("privilege %s is already enabled", privilegeName);
+                status = ERROR_SUCCESS;
+                goto end;
+            }
+
+            // we have the privilege but it's not enabled
+            privileges->Privileges[i].Attributes |= SE_PRIVILEGE_ENABLED;
+            if (AdjustTokenPrivileges(token, FALSE, privileges, 0, NULL, NULL))
+            {
+                LogDebug("privilege successfully enabled");
+                status = ERROR_SUCCESS;
+            }
+            else
+            {
+                status = win_perror("enabling token privilege");
+            }
+            goto end;
+        }
+    }
+
+    // we don't have the requested privilege at all
+    // TODO: adding privilege to a token seems impossible
+    // is it possible to create a fresh token without being a LSA provider?
+
+    status = ERROR_PRIVILEGE_NOT_HELD;
+end:
+    free(privileges);
+    if (token)
+        CloseHandle(token);
+    return status;
+}
+
+DWORD EnableUIAccess()
+{
+    HANDLE token = NULL;
+    DWORD status;
+    DWORD ui = 1;
+
+    LogDebug("start");
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token))
+    {
+        status = win_perror("get current process token");
+        goto end;
+    }
+
+    if (SetTokenInformation(token, TokenUIAccess, &ui, sizeof(ui)))
+        status = ERROR_SUCCESS;
+    else
+        status = win_perror("SetTokenInformation(TokenUIAccess");
+end:
+    if (token)
+        CloseHandle(token);
+    return status;
+}

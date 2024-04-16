@@ -60,7 +60,6 @@ DWORD QioReadUntilEof(IN HANDLE file, OUT void *buffer, IN DWORD bufferSize);
 WINDOWSUTILS_API
 BOOL QioCopyUntilEof(IN HANDLE output, IN HANDLE input);
 
-
 #ifdef __cplusplus
 }
 #endif
