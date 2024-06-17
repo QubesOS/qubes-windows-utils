@@ -47,10 +47,10 @@ MultiStrSize(
     while (*MultiStr)
     {
         for (; *MultiStr; ++MultiStr, ++length);
-        
+
         ++MultiStr;
         ++length;
-        
+
         if (Count) ++(*Count);
     }
     ++length; // final NULL
@@ -77,10 +77,10 @@ MultiWStrSize(
     while (*MultiStr)
     {
         for (; *MultiStr; ++MultiStr, ++length);
-        
+
         ++MultiStr;
         ++length;
-        
+
         if (Count) ++(*Count);
     }
     ++length; // final NULL
@@ -118,7 +118,7 @@ MultiStrAdd(
 
     memcpy(MultiStr + multiStrSize - 1, Str, strSize);
     MultiStr[multiStrSize + strSize - 1] = '\0';
-    
+
     return TRUE;
 }
 
@@ -152,6 +152,6 @@ MultiWStrAdd(
 
     memcpy(MultiStr + multiStrSize / sizeof(WCHAR) - 1, Str, strSize);
     MultiStr[(multiStrSize + strSize) / sizeof(WCHAR) - 1] = L'\0';
-    
+
     return TRUE;
 }

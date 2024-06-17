@@ -137,7 +137,7 @@ WCHAR GetOptionW(
                 else
                 {
                     // option specified is not in list of valid options
-                    chOpt = -1;
+                    chOpt = (WCHAR)-1;
                     pszParam = &(argv[optind][0]);
                 }
             }
@@ -145,7 +145,7 @@ WCHAR GetOptionW(
             {
                 // though option specifier was given, option character
                 // is not alpha or was was not specified
-                chOpt = -1;
+                chOpt = (WCHAR)-1;
                 pszParam = &(argv[optind][0]);
             }
         }
@@ -164,7 +164,7 @@ WCHAR GetOptionW(
 
     optind++;
     optargW = pszParam;
-    return (chOpt);
+    return chOpt;
 }
 
 CHAR GetOptionA(

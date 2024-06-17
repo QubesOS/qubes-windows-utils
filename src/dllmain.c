@@ -23,6 +23,7 @@
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reasonForCall, void *reserved)
 {
+    UNREFERENCED_PARAMETER(reserved);
     switch (reasonForCall)
     {
     case DLL_PROCESS_ATTACH:

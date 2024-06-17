@@ -21,7 +21,6 @@
 
 #pragma once
 #include <windows.h>
-#include <stdlib.h>
 
 // Circular memory queue implementation.
 
@@ -55,7 +54,7 @@ void CmqDestroy(IN CMQ_BUFFER *buffer);
 
 // "push" data to the queue
 WINDOWSUTILS_API
-BOOL CmqAddData(IN CMQ_BUFFER *buffer, IN const void *data, UINT64 dataSize);
+BOOL CmqAddData(IN CMQ_BUFFER *buffer, IN const void *data, IN UINT64 dataSize);
 
 // "pop" data from the queue, dataSize=0: get all data (make sure you have the space for it)
 WINDOWSUTILS_API

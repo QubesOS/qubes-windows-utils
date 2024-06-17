@@ -49,6 +49,7 @@ static void SvcSetState(
     IN DWORD win32ExitCode
     )
 {
+    UNREFERENCED_PARAMETER(win32ExitCode);
     LogVerbose("start");
 
     LogDebug("state: %lu", state);
@@ -153,6 +154,9 @@ static DWORD WINAPI SvcCtrlHandlerEx(
 
 static void WINAPI SvcMain(DWORD argc, WCHAR *argv[])
 {
+    // TODO: pass these to the worker function
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
     DWORD status;
 
     LogVerbose("start");

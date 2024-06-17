@@ -21,7 +21,6 @@
 
 #pragma once
 #include <windows.h>
-#include "buffer.h"
 
 /*
 This is a generic implementation of a named pipe server.

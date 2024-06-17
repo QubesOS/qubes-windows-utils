@@ -21,11 +21,6 @@
 
 #pragma once
 #include <windows.h>
-#include <lmcons.h>
-#include <aclapi.h>
-#include <userenv.h>
-#include <strsafe.h>
-#include <wtsapi32.h>
 
 #ifdef __cplusplus
 extern "C" {

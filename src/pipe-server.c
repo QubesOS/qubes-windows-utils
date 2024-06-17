@@ -42,7 +42,7 @@ typedef struct _PIPE_CLIENT
     CRITICAL_SECTION Lock;
     HANDLE ReaderThread;
     HANDLE WriterThread;
-    DWORD RefCount;
+    LONG RefCount;
     PVOID UserData;
 } PIPE_CLIENT, *PPIPE_CLIENT;
 
@@ -220,7 +220,7 @@ static PPIPE_CLIENT QpsGetClientRaw(
     {
         if (IncreaseRefcount)
             InterlockedIncrement(&returnClient->RefCount);
-        LogVerbose("[%lld] (%p) refs: %lu", returnClient->Id, returnClient, returnClient->RefCount);
+        LogVerbose("[%lld] (%p) refs: %ld", returnClient->Id, returnClient, returnClient->RefCount);
     }
     else
     {
@@ -252,7 +252,7 @@ static void QpsReleaseClient(
     // the global server lock isn't ideal but we would use it anyway to protect access to the client list...
     EnterCriticalSection(&Server->Lock);
     InterlockedDecrement(&Client->RefCount);
-    LogVerbose("[%lld] (%p) refs: %lu", Client->Id, Client, Client->RefCount);
+    LogVerbose("[%lld] (%p) refs: %ld", Client->Id, Client, Client->RefCount);
 
     if (Client->RefCount == 0)
     {
@@ -326,7 +326,7 @@ static DWORD WINAPI QpsReaderThread(
         // disconnect could happen after a successful read but before entering the client lock below
         if (client->Disconnecting)
         {
-            LogWarning("[%lld] client is disconnecting, exiting", client->Id);
+            LogDebug("[%lld] client is disconnecting, exiting", client->Id);
             QpsReleaseClient(server, client);
             free(param);
             free(buffer);
@@ -383,7 +383,7 @@ static DWORD WINAPI QpsWriterThread(
         if (client->Disconnecting)
         {
             LeaveCriticalSection(&client->Lock);
-            LogWarning("[%lld] client is disconnecting, exiting", client->Id);
+            LogDebug("[%lld] client is disconnecting, exiting", client->Id);
             QpsReleaseClient(server, client);
             free(param);
             free(data);
@@ -441,6 +441,9 @@ static DWORD QpsConnectClient(
         return ERROR_SHUTDOWN_IN_PROGRESS;
 
     client = malloc(sizeof(PIPE_CLIENT));
+    if (!client)
+        return ERROR_NOT_ENOUGH_MEMORY;
+
     ZeroMemory(client, sizeof(PIPE_CLIENT));
 
     EnterCriticalSection(&Server->Lock);
@@ -881,11 +884,18 @@ DWORD QpsConnect(
         return win_perror("reading size of write pipe name");
     }
 
+    if (cbWritePipeName > sizeof(writePipeName) - 2 || cbWritePipeName % 2 != 0)
+    {
+        LogError("invalid pipe name size from server (%u)", cbWritePipeName);
+        return ERROR_INTERNAL_ERROR;
+    }
+
     if (!ReadFile(*ReadPipe, writePipeName, cbWritePipeName, &read, NULL))
     {
         CloseHandle(*ReadPipe);
         return win_perror("reading write pipe name");
     }
+    writePipeName[cbWritePipeName/2] = L'0';
 
     // Try to open the write pipe; wait for it, if necessary.
     do

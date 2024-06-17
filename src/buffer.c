@@ -22,6 +22,8 @@
 #include "buffer.h"
 #include "log.h"
 
+#include <stdlib.h>
+
 // internal data structure
 struct _CMQ_BUFFER
 {
@@ -74,7 +76,7 @@ void CmqDestroy(IN CMQ_BUFFER *buffer)
 }
 
 // zero-fill buffer, rewind internal pointer
-void CmqClear(CMQ_BUFFER *buffer)
+void CmqClear(IN CMQ_BUFFER *buffer)
 {
     LogDebug("%p", buffer);
 

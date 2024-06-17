@@ -72,10 +72,10 @@ DWORD QioReadUntilEof(IN HANDLE file, OUT void *buffer, IN DWORD bufferSize)
     {
         if (!ReadFile(file, (BYTE *)buffer + cbReadTotal, bufferSize - cbReadTotal, &cbRead, NULL))
             return cbReadTotal;
-        
+
         if (cbRead == 0)
             return cbReadTotal;
-        
+
         cbReadTotal += cbRead;
     }
     return cbReadTotal;

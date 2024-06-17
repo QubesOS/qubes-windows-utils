@@ -22,6 +22,13 @@
 #include "exec.h"
 #include "log.h"
 
+#include <aclapi.h>
+#include <lmcons.h>
+#include <strsafe.h>
+#include <userenv.h>
+#include <wtsapi32.h>
+
+
 static WCHAR* g_OriginalCommandLine = NULL;
 
 HANDLE GetLoggedOnUserToken(
@@ -31,7 +38,6 @@ HANDLE GetLoggedOnUserToken(
 {
     DWORD consoleSessionId;
     HANDLE userToken, duplicateToken;
-    DWORD nameSize = UNLEN;
 
     consoleSessionId = WTSGetActiveConsoleSessionId();
     if (0xFFFFFFFF == consoleSessionId)
@@ -372,7 +378,6 @@ DWORD CreatePublicPipeSecurityDescriptor(
 {
     DWORD status;
     SID *everyoneSid = NULL;
-    SID *adminSid = NULL;
     EXPLICIT_ACCESS	ea[2] = { 0 };
     SID_IDENTIFIER_AUTHORITY sidAuthWorld = SECURITY_WORLD_SID_AUTHORITY;
 
