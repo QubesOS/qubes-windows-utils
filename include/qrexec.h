@@ -80,6 +80,7 @@ struct exec_params
 {
     uint32_t connect_domain; /* target domain name */
     uint32_t connect_port;   /* target vchan port for i/o exchange */
+#pragma warning(suppress:4200) // nonstandard extension: zero-sized array
     char cmdline[0];         /* command line to execute, size = msg_header.len - sizeof(struct exec_params) */
 };
 
