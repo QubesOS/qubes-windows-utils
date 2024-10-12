@@ -242,3 +242,28 @@ DWORD CfgEnsureKeyExists(IN const WCHAR *moduleName OPTIONAL)
 
     return status;
 }
+
+static WCHAR* g_ToolsDir = NULL;
+
+const WCHAR* CfgGetToolsDir(void)
+{
+    if (g_ToolsDir)
+        return g_ToolsDir;
+
+    DWORD status = ERROR_OUTOFMEMORY;
+    g_ToolsDir = (WCHAR*)malloc(MAX_PATH_LONG_WSIZE);
+    if (!g_ToolsDir)
+        goto end;
+
+    status = CfgReadString(NULL, L"InstallDir", g_ToolsDir, MAX_PATH_LONG, NULL);
+    if (status != ERROR_SUCCESS)
+    {
+        g_ToolsDir[0] = L'\0';
+        goto end;
+    }
+
+    status = ERROR_SUCCESS;
+end:
+    SetLastError(status);
+    return g_ToolsDir;
+}

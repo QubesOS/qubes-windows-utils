@@ -67,6 +67,10 @@ DWORD CfgWriteDword(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueNa
 WINDOWSUTILS_API
 DWORD CfgEnsureKeyExists(IN const WCHAR *moduleName OPTIONAL);
 
+// Returns full path to QWT installation directory.
+WINDOWSUTILS_API
+const WCHAR* CfgGetToolsDir(void);
+
 #ifdef __cplusplus
 }
 #endif
