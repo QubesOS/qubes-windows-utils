@@ -1,8 +1,5 @@
 # Common utilities for Windows Tools
 
-- TODO: installer for win10 QWT
-- TODO: integrate with Qubes builder
-
 ### Environment variables
 
 - `QUBES_INCLUDES` must contain paths containing `libvchan` includes. Normally it's `<src>/qubes-core-vchan-xen/windows/include`.

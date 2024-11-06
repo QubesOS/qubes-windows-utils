@@ -1,0 +1,24 @@
+vm:
+  windows:
+    build:
+    - vs2022/windows-utils.sln
+    bin:
+    - vs2022/x64/@CONFIGURATION@/windows-utils/windows-utils.dll
+    inc:
+    - include/buffer.h
+    - include/config.h
+    - include/crc32.h
+    - include/error.h
+    - include/exec.h
+    - include/getopt.h
+    - include/list.h
+    - include/log.h
+    - include/pipe-server.h
+    - include/qrexec.h
+    - include/qubes-io.h
+    - include/qubes-string.h
+    - include/service.h
+    - include/utf8-conv.h
+    - include/vchan-common.h
+    lib:
+    - vs2022/x64/@CONFIGURATION@/windows-utils/windows-utils.lib
