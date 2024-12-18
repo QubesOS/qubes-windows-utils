@@ -679,6 +679,8 @@ DWORD QpsMainLoop(
             return win_perror("writing name of inbound pipe");
         }
 
+        // FIXME: this blocks forever if the client never connects here
+        // readPipe needs to be open in async mode
         do
         {
             LogVerbose("waiting for inbound connection, pipe %s", pipeName);
@@ -912,7 +914,7 @@ DWORD QpsConnect(
         // This pipe may be not created yet
         status = GetLastError();
         if ((*WritePipe == INVALID_HANDLE_VALUE) && (ERROR_FILE_NOT_FOUND != status))
-            return win_perror("open write pipe");
+            return win_perror2(status, "open write pipe");
 
         Sleep(10);
     } while (*WritePipe == INVALID_HANDLE_VALUE);
