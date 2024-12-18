@@ -103,7 +103,7 @@ static DWORD CfgOpenKey(IN const WCHAR *moduleName OPTIONAL, OUT HKEY *key, IN c
 }
 
 // Read a string value from registry config.
-DWORD CfgReadString(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueName, OUT WCHAR *value, IN DWORD valueLength, OUT BOOL *rootFallback OPTIONAL)
+DWORD CfgReadString(IN const WCHAR* moduleName OPTIONAL, IN const WCHAR* valueName, OUT WCHAR* value, IN DWORD valueLength, OUT BOOL* rootFallback OPTIONAL)
 {
     HKEY key = NULL;
     DWORD status;
@@ -115,9 +115,9 @@ DWORD CfgReadString(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueNa
         goto cleanup;
 
     size = sizeof(WCHAR) * (valueLength - 1);
-    ZeroMemory(value, sizeof(WCHAR)*valueLength);
+    ZeroMemory(value, sizeof(WCHAR) * valueLength);
 
-    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (BYTE *) value, &size));
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (BYTE*)value, &size));
     if (status != ERROR_SUCCESS)
         goto cleanup;
 
