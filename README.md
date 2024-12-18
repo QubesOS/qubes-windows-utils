@@ -1,14 +1,15 @@
 # Common utilities for Windows Tools
 
-### Environment variables
+## Local command-line build on Windows
 
-- `QUBES_INCLUDES` must contain paths containing `libvchan` includes. Normally it's `<src>/qubes-core-vchan-xen/windows/include`.
-- `QUBES_LIBS` must contain paths containing `libvchan` libraries. Normally it's `<src>/qubes-core-vchan-xen/windows/bin`.
+### Prerequisites
 
-## Command-line build
+- Microsoft EWDK iso mounted as a drive
+- `qubes-builderv2`
+- `powershell-yaml` PowerShell package (run `powershell -command Install-Package powershell-yaml` as admin)
+  (TODO: provide offline installer for this)
+- `vmm-xen-windows-pvdrivers` and `core-vchan-xen` built with the same `output_dir` as below
 
-`EWDK_PATH` env variable must be set to the root of MS Enterprise WDK for Windows 10/Visual Studio 2022. 
+### Build
 
-`build.cmd` script builds the solution from command line using the EWDK (no need for external VS installation).
-
-Usage: `build.cmd Release|Debug`
+- run `powershell qubes-builderv2\qubesbuilder\plugins\build_windows\scripts\local\build.ps1 src_dir output_dir Release|Debug`
