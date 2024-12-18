@@ -134,6 +134,44 @@ cleanup:
     return status;
 }
 
+// Read a multi-string value from registry config. It's a sequence of C-strings terminated by an additional '\0'.
+DWORD CfgReadMultiString(
+    IN const WCHAR* moduleName OPTIONAL,
+    IN const WCHAR* valueName,
+    OUT WCHAR* value,
+    IN DWORD valueLength,
+    OUT BOOL* rootFallback OPTIONAL
+)
+{
+    HKEY key = NULL;
+    DWORD status;
+    DWORD type;
+    DWORD size;
+
+    status = CfgOpenKey(moduleName, &key, valueName, rootFallback);
+    if (status != ERROR_SUCCESS)
+        goto cleanup;
+
+    size = sizeof(WCHAR) * (valueLength - 1);
+    ZeroMemory(value, sizeof(WCHAR) * valueLength);
+
+    SetLastError(status = RegQueryValueEx(key, valueName, NULL, &type, (BYTE*)value, &size));
+    if (status != ERROR_SUCCESS)
+        goto cleanup;
+
+    if (type != REG_MULTI_SZ)
+    {
+        status = ERROR_DATATYPE_MISMATCH;
+        goto cleanup;
+    }
+
+cleanup:
+    if (key)
+        RegCloseKey(key);
+
+    return status;
+}
+
 // Read a DWORD value from registry config.
 DWORD CfgReadDword(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueName, OUT DWORD *value, OUT BOOL *rootFallback OPTIONAL)
 {

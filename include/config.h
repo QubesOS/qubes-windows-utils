@@ -50,6 +50,16 @@ DWORD CfgGetModuleName(OUT WCHAR *moduleName, IN DWORD cchModuleName);
 WINDOWSUTILS_API
 DWORD CfgReadString(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueName, OUT WCHAR *value, IN DWORD valueLength, OUT BOOL *rootFallback OPTIONAL);
 
+// Read a multi-string value from registry config. It's a sequence of C-strings terminated by an additional '\0'.
+WINDOWSUTILS_API
+DWORD CfgReadMultiString(
+    IN const WCHAR* moduleName OPTIONAL,
+    IN const WCHAR* valueName,
+    OUT WCHAR* value,
+    IN DWORD valueLength,
+    OUT BOOL* rootFallback OPTIONAL
+);
+
 // Read a DWORD value from registry config.
 WINDOWSUTILS_API
 DWORD CfgReadDword(IN const WCHAR *moduleName OPTIONAL, IN const WCHAR *valueName, OUT DWORD *value, OUT BOOL *rootFallback OPTIONAL);
