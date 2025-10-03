@@ -290,6 +290,10 @@ fallback:
     free(logPath);
     LogInfo("Log started, module name: %s", g_LogName);
 
+    // system uptime (useful for performance testing)
+    UINT64 uptime_ms = GetTickCount64();
+    LogInfo("System uptime: %.3f seconds", uptime_ms / 1000.0f);
+
     // reuse systemPath
     len = ARRAYSIZE(systemPath); //UNLEN
     if (!GetUserName(systemPath, &len))
