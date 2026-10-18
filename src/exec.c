@@ -173,7 +173,7 @@ DWORD CreatePipedProcessAsUser(
         if (userToken)
             LogDebug("logged on user name: '%s'", loggedUserName);
 
-        if (!userToken || wcscmp(loggedUserName, userName))
+        if (!userToken || CompareStringOrdinal(loggedUserName, -1, userName, -1, TRUE) != CSTR_EQUAL)
         {
             if (userToken)
             {
