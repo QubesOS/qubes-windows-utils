@@ -22,3 +22,5 @@ vm:
     - include/vchan-common.h
     lib:
     - vs2022/x64/@CONFIGURATION@/windows-utils/windows-utils.lib
+    pdb:
+    - vs2022/x64/@CONFIGURATION@/windows-utils/windows-utils.pdb
